@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
-
+import ForestScene from './scenes/ForestScene';
+import RoomScene from './scenes/RoomScene';
+import EndingScene from './scenes/EndingScene';
 // 第一个场景：开始画面
 class MenuScene extends Phaser.Scene {
   constructor() {
@@ -61,15 +63,16 @@ class IntroScene extends Phaser.Scene {
       color: '#b8c2cc',
     }).setOrigin(0.5);
 
-    const back = this.add.text(480, 420, '返回开始画面', {
+    const back = this.add.text(480, 420, '进入森林', {
       fontSize: '22px',
       color: '#ffffff',
       padding: { x: 16, y: 12 },
     }).setOrigin(0.5);
 
-    back.setInteractive({ useHandCursor: true });
+        back.setInteractive({ useHandCursor: true });
+
     back.once('pointerdown', () => {
-      this.scene.start('menu');
+      this.scene.start('forest');
     });
   }
 }
@@ -86,5 +89,5 @@ new Phaser.Game({
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [MenuScene, IntroScene],
+  scene: [MenuScene, IntroScene, ForestScene, RoomScene, EndingScene],
 });

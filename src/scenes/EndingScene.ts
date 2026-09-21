@@ -1,0 +1,34 @@
+import Phaser from 'phaser';
+
+export default class EndingScene extends Phaser.Scene {
+  constructor() {
+    super('ending');
+  }
+
+  create() {
+    this.cameras.main.setBackgroundColor('#10151c');
+
+    this.add.text(480, 190, '结尾动画', {
+      fontSize: '36px',
+      color: '#e6cf97',
+    }).setOrigin(0.5);
+
+    this.add.text(480, 270, '动画占位画面 · Demo 到此结束', {
+      fontSize: '22px',
+      color: '#b8c2cc',
+    }).setOrigin(0.5);
+
+    const button = this.add.text(480, 390, '返回开始', {
+      fontSize: '24px',
+      color: '#ffffff',
+      backgroundColor: '#3a624d',
+      padding: { x: 24, y: 14 },
+    }).setOrigin(0.5);
+
+    button.setInteractive({ useHandCursor: true });
+
+    button.once('pointerdown', () => {
+      this.scene.start('menu');
+    });
+  }
+}
