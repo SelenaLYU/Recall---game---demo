@@ -8,17 +8,17 @@ export default class EndingScene extends Phaser.Scene {
   create() {
     this.cameras.main.setBackgroundColor('#10151c');
 
-    this.add.text(480, 190, '结尾动画', {
+    const title = this.add.text(480, 190, '结尾动画', {
       fontSize: '36px',
       color: '#e6cf97',
     }).setOrigin(0.5);
 
-    this.add.text(480, 270, '动画占位画面 · Demo 到此结束', {
+    const subtitle = this.add.text(480, 270, '动画占位画面', {
       fontSize: '22px',
       color: '#b8c2cc',
     }).setOrigin(0.5);
 
-    const button = this.add.text(480, 390, '返回开始', {
+    const button = this.add.text(480, 390, '跳过动画', {
       fontSize: '24px',
       color: '#ffffff',
       backgroundColor: '#3a624d',
@@ -27,8 +27,26 @@ export default class EndingScene extends Phaser.Scene {
 
     button.setInteractive({ useHandCursor: true });
 
-    button.once('pointerdown', () => {
-      this.scene.start('menu');
+    let finished = false;
+
+    const finishEnding = () => {
+      if (finished) return;
+      finished = true;
+
+      title.setText('感谢游玩');
+      subtitle.setText('RECALL · Demo 到此结束');
+      button.setText('返回开始');
+    };
+
+    // 暂时用 3 秒模拟动画，之后替换为视频播放结束事件
+    this.time.delayedCall(3000, finishEnding);
+
+    button.on('pointerdown', () => {
+      if (finished) {
+        this.scene.start('menu');
+      } else {
+        finishEnding();
+      }
     });
   }
 }
