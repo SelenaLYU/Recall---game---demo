@@ -29,7 +29,7 @@
 | 负责人 | 路径 | 内容 |
 | --- | --- | --- |
 | C | `src/scenes/ForestScene.ts`、`src/scenes/RoomScene.ts`、`src/gameplay/**`、`src/systems/Sfx.ts` | 森林/房间玩法、引擎模块、程序化音效 |
-| D | `src/main.ts`、`src/scenes/EndingScene.ts`、场景登记 | 启动配置、开场/结尾 |
+| D | `src/main.ts`、`src/MenuRoomMusic.ts`、`src/scenes/EndingScene.ts`、场景登记 | 启动配置、开场/结尾、菜单及房间配乐衔接 |
 | A | `src/ui/**` | UI 组件 |
 | B | `assets/**` | 素材 |
 
@@ -65,6 +65,11 @@
 - 音频在首次用户手势后才解锁（浏览器策略）；解锁前静默跳过，不报错。
 
 ### 场景契约
+
+- 已接入 `assets/audio/menu-room-bgm.mp3`（Luminous Forest）：菜单、房间/解谜、结尾动画之后的感谢页面循环播放；开场动画、森林、结尾动画期间不播放这首。音量暂设 0.35。
+- `src/MenuRoomMusic.ts` 负责音频预加载、浏览器首次点击解锁、场景退出时停止及清理。每次进入相应场景从头播放，沿用场景键 `menu` / `room` / `ending`。
+- 房间音乐在 `src/main.ts` 监听房间的 CREATE 事件接入，C 不需要在 `RoomScene` 重复调用播放函数；感谢页面在 `EndingScene` 的结束处理内调用。接入正式结尾视频时仍在视频结束/跳过后才调用。
+- 森林音效和环境音继续由 `Sfx` 管理，后续森林配乐独立接入。
 
 - scene key 固定小写：`menu` / `intro` / `forest` / `room` / `ending`，不得改名。
 - `forest → room` 的唯一入口：取得钥匙 → 门出现 → 角色进入门（`this.scene.start('room')`）。

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { playMenuRoomMusic } from '../MenuRoomMusic';
 
 export default class EndingScene extends Phaser.Scene {
   constructor() {
@@ -32,6 +33,9 @@ export default class EndingScene extends Phaser.Scene {
     const finishEnding = () => {
       if (finished) return;
       finished = true;
+
+      // 结尾动画（目前为占位计时）结束或跳过后，感谢页面才播放音乐。
+      playMenuRoomMusic(this);
 
       title.setText('感谢游玩');
       subtitle.setText('RECALL · Demo 到此结束');
