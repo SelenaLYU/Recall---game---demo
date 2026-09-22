@@ -123,8 +123,8 @@ export class Player {
 
     this.createAnims();
 
-    // 脚下软阴影：给角色“落地感”（落地实、空中淡）
-    this.shadow = scene.add.ellipse(0, 29, 24, 7, 0x0b170f, 0.28);
+    // 脚下软阴影：贴着脚底位置（与精灵底部对齐），落地实、空中淡
+    this.shadow = scene.add.ellipse(0, this.opts.height / 2 + FOOT_PADDING_PX * SPRITE_SCALE, 24, 7, 0x0b170f, 0.28);
     // 序列帧角色：origin 底部中心；再下移底部透明边距，让脚真实踩在草皮上
     this.sprite = scene.add.sprite(0, this.opts.height / 2 + FOOT_PADDING_PX * SPRITE_SCALE, 'char-yuyu-idle', 0);
     this.sprite.setOrigin(0.5, 1).setScale(SPRITE_SCALE);
