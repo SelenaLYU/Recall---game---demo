@@ -48,6 +48,7 @@ export class Terrain {
       .setStrokeStyle(2, COLORS.outline, 0.5);
     this.scene.physics.add.existing(body, true);
     this.solids.push(body);
+    this.addSoilTexture(def.x, def.y, def.width, def.height);
 
     if (kind === 'ground') {
       this.addGrassLip(def.x, def.y, def.width);
@@ -101,10 +102,29 @@ export class Terrain {
     }
   }
 
+  /** 土层材质：上亮下暗的竖向渐变 + 确定性碎石点，去掉大平面色块感 */
+  private addSoilTexture(x: number, y: number, width: number, height: number): void {
+    if (height < 40) {
+      return;
+    }
+    const g = this.scene.add.graphics();
+    g.fillGradientStyle(0x36543f, 0x36543f, 0x24392c, 0x24392c, 1);
+    g.fillRect(x + 2, y + 2, width - 4, height - 4);
+    for (let ty = y + 28; ty < y + height - 10; ty += 30) {
+      for (let tx = x + 16 + ((ty * 13) % 22); tx < x + width - 10; tx += 27) {
+        const dark = (tx + ty) % 2 === 0;
+        g.fillStyle(dark ? 0x1d3026 : 0x41614f, 0.55);
+        g.fillCircle(tx, ty, dark ? 2.2 : 1.7);
+      }
+    }
+  }
+
   private addGrassLip(x: number, y: number, width: number, color: number = COLORS.grass): void {
     this.scene.add
       .rectangle(x, y, width, GRASS_LIP, color)
       .setOrigin(0, 0)
       .setStrokeStyle(2, COLORS.outline, 0.35);
+    // 草皮顶部受光高光条
+    this.scene.add.rectangle(x + 2, y + 1, width - 4, 3, 0x7fb391, 0.85).setOrigin(0, 0);
   }
 }

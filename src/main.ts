@@ -88,6 +88,10 @@ new Phaser.Game({
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
+    // 高分屏按设备像素比放大渲染缓冲（上限 2x）：逻辑坐标仍是 960×540，
+    // 但画布实际按 2 倍绘制，FIT 拉伸不再发虚（AGENTS.md 第 6 节）
+    zoom: Math.min(window.devicePixelRatio || 1, 2),
   },
+  render: { antialias: true, powerPreference: 'high-performance' },
   scene: [MenuScene, IntroScene, ForestScene, RoomScene, EndingScene],
 });

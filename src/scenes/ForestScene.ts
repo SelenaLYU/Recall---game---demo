@@ -78,6 +78,7 @@ export default class ForestScene extends Phaser.Scene {
     this.buildMist();
     this.buildBackground();
     this.buildBushes();
+    this.buildLightShafts();
     this.buildTrees();
     this.buildVineBranch();
     this.buildTerrain();
@@ -91,6 +92,7 @@ export default class ForestScene extends Phaser.Scene {
     this.buildHud();
     this.buildItemHud();
     this.buildVignette();
+    this.applyPostFx();
     Effects.fireflies(this, WORLD_WIDTH, 16);
 
     this.cameras.main.fadeIn(250, 23, 56, 43);
@@ -263,6 +265,7 @@ export default class ForestScene extends Phaser.Scene {
   private buildItems(): void {
     // 药（叙事收集品，高台左侧）
     this.medicineVisual = this.add.container(2170, 185).setDepth(6);
+    Effects.glow(this, this.medicineVisual);
     const herbGlow = this.add.ellipse(0, 0, 54, 54, GOLD, 0.16);
     const bottle = this.add
       .rectangle(0, 0, 16, 22, 0xf2efe4)
@@ -286,6 +289,7 @@ export default class ForestScene extends Phaser.Scene {
     const keyX = 2290;
     const keyY = 185;
     this.keyVisual = this.add.container(keyX, keyY).setDepth(6);
+    Effects.glow(this, this.keyVisual);
     const glow = this.add.ellipse(0, 0, 64, 64, GOLD, 0.18);
     const keyGraphic = this.add.graphics();
     keyGraphic.lineStyle(4, GOLD, 1);
@@ -320,6 +324,7 @@ export default class ForestScene extends Phaser.Scene {
 
   private buildDoor(): void {
     this.doorVisual = this.add.container(2620, GROUND_TOP).setDepth(6).setVisible(false);
+    Effects.glow(this, this.doorVisual);
     this.doorGlow = this.add.ellipse(0, -58, 96, 136, GOLD, 0.12);
     const frame = this.add
       .rectangle(0, 0, 76, 116, 0x8a6d3b)
@@ -381,8 +386,48 @@ export default class ForestScene extends Phaser.Scene {
     this.hudKey.add([keyIcon]);
   }
 
+  /** 森林光柱：低透明斜四边形 + ADD 混合，慢呼吸（AGENTS.md 第 6 节光影约定） */
+  private buildLightShafts(): void {
+    const spots = [
+      { x: 320, w: 96 },
+      { x: 960, w: 76 },
+      { x: 1720, w: 104 },
+      { x: 2420, w: 84 },
+    ];
+    spots.forEach((spot, i) => {
+      const shaft = this.add
+        .graphics()
+        .setDepth(-3)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setScrollFactor(0.55)
+        .setAlpha(0.55);
+      shaft.fillStyle(0xf2e6c0, 0.07);
+      shaft.fillPoints(
+        [
+          { x: spot.x, y: -40 },
+          { x: spot.x + spot.w, y: -40 },
+          { x: spot.x + spot.w - 130, y: WORLD_HEIGHT + 60 },
+          { x: spot.x - 130, y: WORLD_HEIGHT + 60 },
+        ],
+        true,
+      );
+      this.tweens.add({
+        targets: shaft,
+        alpha: { from: 0.4, to: 0.95 },
+        duration: 5600 + i * 1400,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    });
+  }
+
   /** 四周轻暗角，收敛视觉焦点 */
   private buildVignette(): void {
+    // WebGL 走相机后期管线的真暗角（applyPostFx），仅 Canvas 降级用渐变贴图
+    if (this.game.renderer.type === Phaser.WEBGL) {
+      return;
+    }
     if (!this.textures.exists('vignette')) {
       const texture = this.textures.createCanvas('vignette', 960, 540);
       const ctx = texture?.getContext();
@@ -396,6 +441,17 @@ export default class ForestScene extends Phaser.Scene {
       }
     }
     this.add.image(480, 270, 'vignette').setScrollFactor(0).setDepth(90);
+  }
+
+  /** 相机级后期：轻微提饱和/对比（multiply 累积）+ 管线暗角（仅 WebGL） */
+  private applyPostFx(): void {
+    if (this.game.renderer.type !== Phaser.WEBGL) {
+      return;
+    }
+    const color = this.cameras.main.postFX?.addColorMatrix();
+    color?.saturate(1.07, true);
+    color?.contrast(1.04, true);
+    this.cameras.main.postFX?.addVignette(0.5, 0.5, 0.92, 0.34);
   }
 
   private showHint(message: string): void {
