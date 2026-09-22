@@ -58,6 +58,18 @@ export default class ForestScene extends Phaser.Scene {
   }
 
   create(): void {
+    // 场景实例在重玩时会被复用，属性初始化器不会重新执行：
+    // 所有玩法状态必须在这里重置（AGENTS.md 第 5 节），否则重玩卡死
+    this.hasKey = false;
+    this.hasMedicine = false;
+    this.doorEntered = false;
+    this.restarting = false;
+    this.hintOverrideUntil = 0;
+    this.lastFlower = null;
+    this.vines = [];
+    this.flowers = [];
+    this.respawnPoints = [];
+
     this.cameras.main.setBackgroundColor('#17382b');
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, true, true, false, false);
 
