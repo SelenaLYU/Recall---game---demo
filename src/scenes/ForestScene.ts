@@ -94,6 +94,7 @@ export default class ForestScene extends Phaser.Scene {
     this.updateVineGrabCheck();
     this.updateRespawns();
     this.updateHintZone();
+    this.updateCameraLookahead(delta);
     this.checkFall();
   }
 
@@ -325,6 +326,15 @@ export default class ForestScene extends Phaser.Scene {
     cam.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     cam.startFollow(this.player.view, true, 0.12, 0.12);
     cam.setDeadzone(140, 90);
+    // 上浮偏移：角色偏画面下方，多看上方地形
+    cam.setFollowOffset(0, -24);
+  }
+
+  /** 镜头朝向前瞻：往面朝方向多看约 46px，平缓过渡 */
+  private updateCameraLookahead(delta: number): void {
+    const cam = this.cameras.main;
+    const targetX = -this.player.facing * 46;
+    cam.followOffset.x += (targetX - cam.followOffset.x) * Math.min(1, delta * 0.004);
   }
 
   private buildHud(): void {

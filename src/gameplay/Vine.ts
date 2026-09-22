@@ -55,11 +55,14 @@ export class Vine {
     return this.scene.time.now >= this.cooldownUntil;
   }
 
-  /** 抓住瞬间带入水平动量，自然起摆 */
+  /** 抓住瞬间带入水平动量；摆幅太小则给保底起摆，保证马上能用 */
   grab(carryVelocityX: number): void {
     const dir = carryVelocityX >= 0 ? 1 : -1;
     this.angle = 0.18 * dir;
     this.angVel = (carryVelocityX / this.length) * 0.65;
+    if (Math.abs(this.angVel) < 0.9) {
+      this.angVel = 0.9 * dir;
+    }
   }
 
   /** 松手后短暂不可重抓，防止瞬间吸回去 */
@@ -72,7 +75,7 @@ export class Vine {
 
     // 单摆：切向重力 + 玩家发力（靠近最低点发力最有效，像真实荡秋千）
     const gravity = -(1400 / this.length) * Math.sin(this.angle);
-    const pump = input.dirX * 3.0 * Math.cos(this.angle);
+    const pump = input.dirX * 3.6 * Math.max(Math.cos(this.angle), 0.12);
     this.angVel += (gravity + pump) * dt;
     this.angVel *= 0.996;
     this.angVel = Phaser.Math.Clamp(this.angVel, -3.2, 3.2);
@@ -85,7 +88,7 @@ export class Vine {
 
     // 上下爬改变绳长（越短摆得越快）
     this.length = Phaser.Math.Clamp(
-      this.length + input.climb * 90 * dt,
+      this.length + input.climb * 110 * dt,
       this.minLength,
       this.maxLength,
     );
@@ -93,12 +96,12 @@ export class Vine {
     this.redraw();
   }
 
-  /** 松手时的甩出速度：切向速度 + 少量向上助力 */
+  /** 松手时的甩出速度：切向速度 + 向上助力 */
   releaseVelocity(): { vx: number; vy: number } {
     const tangential = this.angVel * this.length;
     return {
-      vx: Math.cos(this.angle) * tangential * 1.15,
-      vy: -Math.sin(this.angle) * tangential * 1.15 - 220,
+      vx: Math.cos(this.angle) * tangential * 1.25,
+      vy: -Math.sin(this.angle) * tangential * 1.25 - 260,
     };
   }
 

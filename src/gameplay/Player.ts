@@ -47,6 +47,19 @@ export class Player {
   /** 物理与视觉根节点（Container），场景对它建 collider/overlap/follow */
   readonly view: Phaser.GameObjects.Container;
 
+  // —— 移动模型常量（调手感改这里）——
+  /** 地面/空中加速 px/s² */
+  private static readonly ACCEL_GROUND = 2600;
+  private static readonly ACCEL_AIR = 1900;
+  /** 无输入时地面/空中减速 px/s² */
+  private static readonly DECEL_GROUND = 3000;
+  private static readonly DECEL_AIR = 1400;
+  /** 急转变向的额外减速倍率 */
+  private static readonly TURN_BOOST = 1.8;
+  /** 下落加重（叠加在世界重力上，共 1.6×），跳跃弧线更漂亮 */
+  private static readonly FALL_GRAVITY_EXTRA = 840;
+  private static readonly SKID_DUST_MS = 320;
+
   state: PlayerState = 'idle';
   facing: -1 | 1 = 1;
 
@@ -71,7 +84,8 @@ export class Player {
   private squashing = false;
   private runPhase = 0;
   private breatheT = 0;
-  private stepTimer = 0;
+  private stepCycle = 0;
+  private skidDustAt = 0;
   private displayedFacing: -1 | 1 = 1;
   /** 空中可用的二段跳次数（落地恢复） */
   private airJumpsLeft = 0;
@@ -84,9 +98,9 @@ export class Player {
       height: 60,
       speed: 240,
       jumpVelocity: -620,
-      coyoteMs: 100,
-      jumpBufferMs: 120,
-      maxFallSpeed: 900,
+      coyoteMs: 120,
+      jumpBufferMs: 140,
+      maxFallSpeed: 1000,
       softLandThreshold: 220,
       hardLandThreshold: 700,
       ...options,
@@ -173,6 +187,7 @@ export class Player {
       this.jumpBufferTimer = 0;
       this.coyoteTimer = 0;
       this.opts.sfx?.jump();
+      this.squash(0.88, 1.14);
       Effects.dust(this.scene, this.view.x, this.view.y + this.opts.height / 2 - 2, 4, 16);
     } else if (this.jumpBufferTimer > 0 && !onGround && this.airJumpsLeft > 0) {
       // 二段跳：稍弱，空中翻滚一圈做辨识
@@ -180,6 +195,7 @@ export class Player {
       this.jumpBufferTimer = 0;
       this.body.setVelocityY(this.opts.jumpVelocity * 0.92);
       this.opts.sfx?.doubleJump();
+      this.squash(0.9, 1.12);
       Effects.ring(this.scene, this.view.x, this.view.y + this.opts.height / 2 - 6, 0xd8e8d0);
       this.scene.tweens.add({
         targets: this.view,
@@ -190,19 +206,39 @@ export class Player {
       });
     }
 
-    // 半重力跳跃顶点：上升末段按住跳跃时抵消一半重力，滞空更可控
-    if (!onGround && jumpHeld && this.body.velocity.y < 0 && this.body.velocity.y > -180) {
-      this.body.setGravityY(-700);
-    } else {
-      this.body.setGravityY(0);
+    // 分段重力：半重力顶点（按住跳跃滞空更可控）+ 下落加重（弧线漂亮、落地更沉）
+    let extraGravity = 0;
+    if (!onGround) {
+      if (jumpHeld && this.body.velocity.y < 0 && this.body.velocity.y > -180) {
+        extraGravity = -700;
+      } else if (this.body.velocity.y > 120) {
+        extraGravity = Player.FALL_GRAVITY_EXTRA;
+      }
     }
+    this.body.setGravityY(extraGravity);
 
     // 提前松键截断上升，形成轻重两档跳高
     if (jumpReleased && this.body.velocity.y < 0) {
       this.body.setVelocityY(this.body.velocity.y * 0.45);
     }
 
-    this.body.setVelocityX(right ? this.opts.speed : left ? -this.opts.speed : 0);
+    // 加速度/摩擦移动模型：起步加速、松键滑停、急转搓地，替代瞬变速度的僵硬感
+    const inputDir = (right ? 1 : 0) - (left ? 1 : 0);
+    let vx = this.body.velocity.x;
+    if (inputDir !== 0) {
+      const turning = Math.sign(inputDir) !== Math.sign(vx) && Math.abs(vx) > 120;
+      const accel = onGround ? Player.ACCEL_GROUND : Player.ACCEL_AIR;
+      vx += inputDir * (turning ? accel * Player.TURN_BOOST : accel) * (delta / 1000);
+      vx = Phaser.Math.Clamp(vx, -this.opts.speed, this.opts.speed);
+      if (turning && onGround && this.scene.time.now >= this.skidDustAt) {
+        this.skidDustAt = this.scene.time.now + Player.SKID_DUST_MS;
+        Effects.dust(this.scene, this.view.x, this.view.y + this.opts.height / 2 - 2, 3, 14);
+      }
+    } else {
+      const decel = (onGround ? Player.DECEL_GROUND : Player.DECEL_AIR) * (delta / 1000);
+      vx = Math.abs(vx) <= decel ? 0 : vx - Math.sign(vx) * decel;
+    }
+    this.body.setVelocityX(vx);
     if (right) {
       this.facing = 1;
     } else if (left) {
@@ -312,6 +348,8 @@ export class Player {
     this.wasOnGround = true;
     this.prevFallSpeed = 0;
     this.squashing = false;
+    this.runPhase = 0;
+    this.stepCycle = 0;
   }
 
   /** 抓藤状态：读键驱动摆荡/爬升，空格甩出 */
@@ -343,6 +381,7 @@ export class Player {
 
   private squash(scaleX: number, scaleY: number): void {
     this.squashing = true;
+    this.scene.tweens.killTweensOf(this.view);
     this.view.setScale(this.facing * scaleX, scaleY);
     this.scene.tweens.add({
       targets: this.view,
@@ -372,9 +411,10 @@ export class Player {
       this.torso.y = -6 - bob;
       this.torso.rotation = -0.08;
 
-      this.stepTimer -= delta;
-      if (this.stepTimer <= 0) {
-        this.stepTimer = 240;
+      // 脚步声与摆腿节拍同步（每半个摆动周期一步）
+      const cycle = Math.floor(this.runPhase / Math.PI);
+      if (cycle !== this.stepCycle) {
+        this.stepCycle = cycle;
         this.opts.sfx?.step();
       }
       return;
@@ -383,7 +423,7 @@ export class Player {
     this.legLeft.rotation = 0;
     this.legRight.rotation = 0;
     this.torso.rotation = 0;
-    this.stepTimer = 0;
+    this.stepCycle = 0;
 
     if (!onGround) {
       // 空中姿势：上升收前腿，下落前后打开
