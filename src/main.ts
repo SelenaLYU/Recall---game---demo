@@ -71,9 +71,19 @@ class IntroScene extends Phaser.Scene {
 
         back.setInteractive({ useHandCursor: true });
 
-    back.once('pointerdown', () => {
+        // 避免按钮和计时器重复切换场景
+    let leaving = false;
+
+    const enterForest = () => {
+      if (leaving) return;
+      leaving = true;
       this.scene.start('forest');
-    });
+    };
+
+    // 暂时用 3 秒等待模拟动画，之后改成视频播完再进入
+    this.time.delayedCall(3000, enterForest);
+
+    back.once('pointerdown', enterForest);
   }
 }
 
