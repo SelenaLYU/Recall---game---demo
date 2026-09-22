@@ -152,13 +152,17 @@ export default class ForestScene extends Phaser.Scene {
     }
   }
 
-  /** B 的森林背景图作远景主层：慢视差（原程序化山影层已移除，避免遮挡素材） */
+  /**
+   * B 的森林背景图作远景主层。清晰度权衡：视差系数越大需要覆盖的世界越宽、
+   * 素材放大越多越糊——0.12 时放大率约 1.26x（2 倍渲染缓冲下接近原生），
+   * 源素材 1920×1080 已是当前最高，需真 4K 请 B 重出 3840×2160。
+   */
   private buildArtBackdrop(): void {
     this.add
-      .image(-60, -170, 'env-forest-bg')
+      .image(-10, -45, 'env-forest-bg')
       .setOrigin(0, 0)
-      .setScale(0.8)
-      .setScrollFactor(0.22)
+      .setScale(0.63)
+      .setScrollFactor(0.12)
       .setDepth(-9);
   }
 

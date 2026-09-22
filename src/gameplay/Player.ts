@@ -40,11 +40,10 @@ export interface PlayerOptions {
  * 动画序列帧配置：B 交付的鱼鱼序列帧（Issue #4 规格：96×112 单帧、横向排布、朝右）。
  * 场景负责在 preload() 里 load.spritesheet，这里负责建动画并按状态切换。
  */
+/** 空中动画为速度驱动逐帧（见 animate），只保留待机/跑步循环动画 */
 const ANIM_DEFS = [
-  { key: 'yuyu-idle', texture: 'char-yuyu-idle', end: 3, frameRate: 6, repeat: -1 },
+  { key: 'yuyu-idle', texture: 'char-yuyu-idle', end: 3, frameRate: 5, repeat: -1 },
   { key: 'yuyu-run', texture: 'char-yuyu-run', end: 7, frameRate: 13, repeat: -1 },
-  { key: 'yuyu-jump', texture: 'char-yuyu-jump', end: 3, frameRate: 14, repeat: 0 },
-  { key: 'yuyu-fall', texture: 'char-yuyu-fall', end: 3, frameRate: 8, repeat: 0 },
 ] as const;
 
 /**
@@ -52,6 +51,8 @@ const ANIM_DEFS = [
  * 碰撞盒小于视觉对玩家更友好）。0.6 时角色偏小不易辨认，0.72 兼顾辨识度与碰撞准度。
  */
 const SPRITE_SCALE = 0.72;
+/** 序列帧底部透明边距（实测约 5 源像素），精灵下移让它踩进草皮而不是悬空 */
+const FOOT_PADDING_PX = 5;
 
 /**
  * 角色控制器：输入、物理与跳跃手感。
@@ -99,6 +100,8 @@ export class Player {
   private skidDustAt = 0;
   private displayedFacing: -1 | 1 = 1;
   private currentAnim = '';
+  /** 本次起跳的初速度，用于把跳跃序列帧按速度进度映射 */
+  private jumpLaunchVy = -620;
   /** 空中可用的二段跳次数（落地恢复） */
   private airJumpsLeft = 0;
   private attachedVine: Vine | null = null;
@@ -122,8 +125,8 @@ export class Player {
 
     // 脚下软阴影：给角色“落地感”（落地实、空中淡）
     this.shadow = scene.add.ellipse(0, 29, 24, 7, 0x0b170f, 0.28);
-    // 序列帧角色：origin 底部中心，脚底对齐碰撞盒下缘（+height/2）
-    this.sprite = scene.add.sprite(0, this.opts.height / 2, 'char-yuyu-idle', 0);
+    // 序列帧角色：origin 底部中心；再下移底部透明边距，让脚真实踩在草皮上
+    this.sprite = scene.add.sprite(0, this.opts.height / 2 + FOOT_PADDING_PX * SPRITE_SCALE, 'char-yuyu-idle', 0);
     this.sprite.setOrigin(0.5, 1).setScale(SPRITE_SCALE);
 
     this.view = scene.add.container(options.x, options.y, [this.shadow, this.sprite]);
@@ -187,6 +190,7 @@ export class Player {
 
     if (this.jumpBufferTimer > 0 && this.coyoteTimer > 0) {
       this.body.setVelocityY(this.opts.jumpVelocity);
+      this.jumpLaunchVy = this.opts.jumpVelocity;
       this.jumpBufferTimer = 0;
       this.coyoteTimer = 0;
       this.opts.sfx?.jump();
@@ -197,6 +201,7 @@ export class Player {
       this.airJumpsLeft -= 1;
       this.jumpBufferTimer = 0;
       this.body.setVelocityY(this.opts.jumpVelocity * 0.92);
+      this.jumpLaunchVy = this.opts.jumpVelocity * 0.92;
       this.opts.sfx?.doubleJump();
       this.squash(0.9, 1.12);
       Effects.ring(this.scene, this.view.x, this.view.y + this.opts.height / 2 - 6, 0xd8e8d0);
@@ -308,9 +313,10 @@ export class Player {
     this.body.setVelocity(0, 0);
     this.body.enable = false;
     this.opts.sfx?.grab();
-    // 悬挂姿势：定格跳跃帧，阴影淡出
-    this.playAnim('yuyu-jump', true);
-    this.sprite.anims.pause();
+    // 悬挂姿势：定格跳跃后段帧（手臂抬起），阴影淡出
+    this.sprite.anims.stop();
+    this.currentAnim = '';
+    this.sprite.setTexture('char-yuyu-jump', 2);
     this.shadow.setAlpha(0.1);
     this.view.setRotation(0);
   }
@@ -327,7 +333,7 @@ export class Player {
     this.body.enable = true;
     this.body.setAllowGravity(true);
     this.body.setVelocity(velocity.vx, velocity.vy);
-    this.sprite.anims.resume();
+    this.view.setRotation(0);
     this.wasOnGround = false;
     this.prevFallSpeed = 0;
     this.coyoteTimer = 0;
@@ -348,8 +354,13 @@ export class Player {
       (this.isDown('S') || this.isDown('DOWN') ? 1 : 0);
     vine.update(delta, { dirX, climb });
 
-    // 双手挂在握点，身体垂在下方
-    this.view.setPosition(vine.handX, vine.handY + 26);
+    // 双手抓在握点，身体沿藤蔓方向垂下并随摆角倾斜（钟摆感，不再是直立硬挂）
+    const hang = 24;
+    this.view.setPosition(
+      vine.handX - Math.sin(vine.angle) * hang,
+      vine.handY + Math.cos(vine.angle) * hang,
+    );
+    this.view.setRotation(vine.angle);
     if (dirX !== 0) {
       this.facing = dirX > 0 ? 1 : -1;
       this.displayedFacing = this.facing;
@@ -372,7 +383,6 @@ export class Player {
     this.view.setRotation(0);
     this.view.setPosition(x, y);
     this.body.reset(x, y);
-    this.sprite.anims.resume();
     this.currentAnim = '';
     this.coyoteTimer = 0;
     this.jumpBufferTimer = 0;
@@ -398,28 +408,33 @@ export class Player {
     });
   }
 
-  /** 状态 → 动画切换（只在变化时 play）；跑步脚步声与动画步频对齐 */
+  /** 状态 → 动画：地面用循环动画，空中按速度进度逐帧取帧（跳跃/下落与运动同步） */
   private animate(delta: number, onGround: boolean): void {
     this.shadow.setAlpha(onGround ? 0.28 : 0.12);
     const speedRatio =
       this.opts.speed === 0 ? 0 : Math.min(1, Math.abs(this.body.velocity.x) / this.opts.speed);
 
-    const target = !onGround
-      ? this.body.velocity.y < 0
-        ? 'yuyu-jump'
-        : 'yuyu-fall'
-      : speedRatio > 0.05
-        ? 'yuyu-run'
-        : 'yuyu-idle';
-    this.playAnim(target);
-
-    if (onGround && speedRatio > 0.05) {
+    if (!onGround) {
+      const vy = this.body.velocity.y;
+      if (vy < 0) {
+        // 上升：从起跳帧推进到顶点帧，进度 = 已消化的初速度比例
+        const p = Phaser.Math.Clamp((vy - this.jumpLaunchVy) / -this.jumpLaunchVy, 0, 1);
+        this.setAirFrame('char-yuyu-jump', p);
+      } else {
+        // 下落：按落速推进，速度越快帧越后倾
+        const p = Phaser.Math.Clamp(vy / 700, 0, 1);
+        this.setAirFrame('char-yuyu-fall', p);
+      }
+      this.stepTimer = 0;
+    } else if (speedRatio > 0.05) {
+      this.playAnim('yuyu-run');
       this.stepTimer -= delta;
       if (this.stepTimer <= 0) {
         this.stepTimer = Player.STEP_INTERVAL_MS;
         this.opts.sfx?.step();
       }
     } else {
+      this.playAnim('yuyu-idle');
       this.stepTimer = 0;
     }
 
@@ -430,12 +445,23 @@ export class Player {
     }
   }
 
-  private playAnim(key: string, force = false): void {
-    if (key === this.currentAnim && !force) {
+  /** 空中逐帧：停掉循环动画后按进度直接设帧（0..3） */
+  private setAirFrame(texture: string, progress: number): void {
+    const frame = Math.min(3, Math.floor(progress * 4));
+    if (this.currentAnim !== texture) {
+      this.sprite.anims.stop();
+      this.currentAnim = texture;
+    }
+    if (this.sprite.frame.name !== String(frame)) {
+      this.sprite.setTexture(texture, frame);
+    }
+  }
+
+  private playAnim(key: string): void {
+    if (key === this.currentAnim) {
       return;
     }
     this.currentAnim = key;
-    this.sprite.anims.resume();
     this.sprite.play(key, true);
   }
 
