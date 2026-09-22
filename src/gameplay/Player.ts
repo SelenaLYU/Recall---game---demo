@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { Effects } from './Effects';
+import { Vine } from './Vine';
 
 export type PlayerState = 'idle' | 'run' | 'jump' | 'fall';
 
@@ -8,6 +9,8 @@ export interface PlayerSfx {
   jump(): void;
   land(): void;
   step(): void;
+  doubleJump(): void;
+  grab(): void;
 }
 
 export interface PlayerOptions {
@@ -70,6 +73,9 @@ export class Player {
   private breatheT = 0;
   private stepTimer = 0;
   private displayedFacing: -1 | 1 = 1;
+  /** 空中可用的二段跳次数（落地恢复） */
+  private airJumpsLeft = 0;
+  private attachedVine: Vine | null = null;
 
   constructor(scene: Phaser.Scene, options: PlayerOptions) {
     this.scene = scene;
@@ -127,16 +133,20 @@ export class Player {
     this.body.setCollideWorldBounds(true);
 
     this.keys = scene.input.keyboard
-      ? (scene.input.keyboard.addKeys('A,D,W,LEFT,RIGHT,UP,SPACE') as Record<
-          string,
-          Phaser.Input.Keyboard.Key
-        >)
+      ? (scene.input.keyboard.addKeys(
+          'A,D,W,S,LEFT,RIGHT,UP,DOWN,SPACE',
+        ) as Record<string, Phaser.Input.Keyboard.Key>)
       : {};
   }
 
   update(delta: number): void {
     if (this.frozen) {
       this.body.setVelocity(0, 0);
+      return;
+    }
+
+    if (this.attachedVine) {
+      this.updateVineGrab(delta);
       return;
     }
 
@@ -150,6 +160,9 @@ export class Player {
       this.justReleased('SPACE') || this.justReleased('W') || this.justReleased('UP');
 
     // 土狼时间 + 跳跃缓冲（Celeste “& Forgiveness” 同款宽容技巧）
+    if (onGround) {
+      this.airJumpsLeft = 1;
+    }
     this.coyoteTimer = onGround ? this.opts.coyoteMs : Math.max(0, this.coyoteTimer - delta);
     this.jumpBufferTimer = jumpPressed
       ? this.opts.jumpBufferMs
@@ -161,6 +174,20 @@ export class Player {
       this.coyoteTimer = 0;
       this.opts.sfx?.jump();
       Effects.dust(this.scene, this.view.x, this.view.y + this.opts.height / 2 - 2, 4, 16);
+    } else if (this.jumpBufferTimer > 0 && !onGround && this.airJumpsLeft > 0) {
+      // 二段跳：稍弱，空中翻滚一圈做辨识
+      this.airJumpsLeft -= 1;
+      this.jumpBufferTimer = 0;
+      this.body.setVelocityY(this.opts.jumpVelocity * 0.92);
+      this.opts.sfx?.doubleJump();
+      Effects.ring(this.scene, this.view.x, this.view.y + this.opts.height / 2 - 6, 0xd8e8d0);
+      this.scene.tweens.add({
+        targets: this.view,
+        angle: this.facing * 360,
+        duration: 280,
+        ease: 'Quad.easeOut',
+        onComplete: () => this.view.setRotation(0),
+      });
     }
 
     // 半重力跳跃顶点：上升末段按住跳跃时抵消一半重力，滞空更可控
@@ -223,9 +250,95 @@ export class Player {
   /** 进入门/演出时锁住角色：不响应输入、不受重力 */
   freeze(): void {
     this.frozen = true;
+    this.attachedVine?.startCooldown(0);
+    this.attachedVine = null;
+    this.body.enable = true;
     this.body.setAllowGravity(false);
     this.body.setGravityY(0);
     this.body.setVelocity(0, 0);
+  }
+
+  get attached(): Vine | null {
+    return this.attachedVine;
+  }
+
+  /** 抓住藤蔓：停用物理体，由藤蔓摆荡驱动位置 */
+  attachVine(vine: Vine): void {
+    this.attachedVine = vine;
+    vine.grab(this.body.velocity.x);
+    this.body.setVelocity(0, 0);
+    this.body.enable = false;
+    this.opts.sfx?.grab();
+    // 悬挂姿势：双腿微收
+    this.legLeft.rotation = -0.35;
+    this.legRight.rotation = -0.18;
+    this.torso.rotation = 0;
+    this.headGroup.y = -19;
+    this.torso.y = -6;
+    this.view.setRotation(0);
+  }
+
+  /** 松手甩出：按藤蔓当前摆速的切向速度 + 向上助力 */
+  releaseVine(): void {
+    const vine = this.attachedVine;
+    if (!vine) {
+      return;
+    }
+    const velocity = vine.releaseVelocity();
+    this.attachedVine = null;
+    vine.startCooldown();
+    this.body.enable = true;
+    this.body.setAllowGravity(true);
+    this.body.setVelocity(velocity.vx, velocity.vy);
+    this.wasOnGround = false;
+    this.prevFallSpeed = 0;
+    this.coyoteTimer = 0;
+    Effects.dust(this.scene, vine.handX, vine.handY + 10, 4, 14);
+  }
+
+  /** 死亡重生：传送回重生点并清状态；钥匙等进度由场景字段保留 */
+  teleportTo(x: number, y: number): void {
+    this.attachedVine = null;
+    this.frozen = false;
+    this.body.enable = true;
+    this.body.setAllowGravity(true);
+    this.body.setGravityY(0);
+    this.view.setScale(this.facing, 1);
+    this.view.setRotation(0);
+    this.view.setPosition(x, y);
+    this.body.reset(x, y);
+    this.coyoteTimer = 0;
+    this.jumpBufferTimer = 0;
+    this.wasOnGround = true;
+    this.prevFallSpeed = 0;
+    this.squashing = false;
+  }
+
+  /** 抓藤状态：读键驱动摆荡/爬升，空格甩出 */
+  private updateVineGrab(delta: number): void {
+    const vine = this.attachedVine;
+    if (!vine) {
+      return;
+    }
+    const dirX =
+      (this.isDown('D') || this.isDown('RIGHT') ? 1 : 0) -
+      (this.isDown('A') || this.isDown('LEFT') ? 1 : 0);
+    const climb =
+      (this.isDown('W') || this.isDown('UP') ? 1 : 0) -
+      (this.isDown('S') || this.isDown('DOWN') ? 1 : 0);
+    vine.update(delta, { dirX, climb });
+
+    // 双手挂在握点，身体垂在下方
+    this.view.setPosition(vine.handX, vine.handY + 26);
+    if (dirX !== 0) {
+      this.facing = dirX > 0 ? 1 : -1;
+      this.displayedFacing = this.facing;
+      this.view.scaleX = this.facing;
+    }
+
+    if (this.justPressed('SPACE')) {
+      this.releaseVine();
+    }
   }
 
   private squash(scaleX: number, scaleY: number): void {

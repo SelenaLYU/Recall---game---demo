@@ -65,6 +65,29 @@ export class Sfx {
     this.tone({ type: 'square', from: 330, to: 110, duration: 0.28, volume: 0.16 });
   }
 
+  doubleJump(): void {
+    this.tone({ type: 'triangle', from: 320, to: 560, duration: 0.12, volume: 0.28 });
+  }
+
+  grab(): void {
+    this.noise(0.09, 0.16, 700);
+  }
+
+  bounce(): void {
+    this.tone({ type: 'triangle', from: 160, to: 620, duration: 0.22, volume: 0.4 });
+    this.tone({ type: 'sine', from: 620, to: 880, duration: 0.12, volume: 0.2, delay: 0.1 });
+  }
+
+  checkpoint(): void {
+    this.tone({ from: 660, duration: 0.14, volume: 0.22 });
+    this.tone({ from: 880, duration: 0.22, volume: 0.24, delay: 0.12 });
+  }
+
+  collect(): void {
+    this.tone({ from: 740, to: 988, duration: 0.2, volume: 0.26 });
+    this.tone({ from: 1318, duration: 0.16, volume: 0.2, delay: 0.12 });
+  }
+
   startAmbient(): void {
     this.startWind();
     // 音频可能在进入场景后才被用户手势解锁，解锁后补开风声

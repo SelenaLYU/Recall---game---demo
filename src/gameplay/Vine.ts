@@ -1,0 +1,133 @@
+import Phaser from 'phaser';
+
+export interface VineSwingInput {
+  /** -1..1，摆荡发力方向 */
+  dirX: number;
+  /** -1..1，攀爬方向（上/下） */
+  climb: number;
+}
+
+/**
+ * 藤蔓：单摆物理的摆荡绳（参考《双人成行》绳子桥段、《阿凡达》藤蔓意象）。
+ * 抓住后 A/D 摆荡蓄力、W/S 上下爬，松手时按当前摆速切向甩出。
+ * 画面为程序化占位（茎+叶片），B 的素材到货后 redraw 换纹理即可，物理不动。
+ */
+export class Vine {
+  readonly anchorX: number;
+  readonly anchorY: number;
+
+  /** 当前摆角（0 = 垂直向下，正值为向右） */
+  angle = 0;
+  /** 角速度 rad/s */
+  angVel = 0;
+  /** 当前握点绳长 */
+  length: number;
+
+  private readonly minLength: number;
+  private readonly maxLength: number;
+  private readonly visual: Phaser.GameObjects.Graphics;
+  private cooldownUntil = 0;
+
+  constructor(
+    private readonly scene: Phaser.Scene,
+    anchorX: number,
+    anchorY: number,
+    options?: { length?: number; minLength?: number; maxLength?: number },
+  ) {
+    this.anchorX = anchorX;
+    this.anchorY = anchorY;
+    this.length = options?.length ?? 190;
+    this.minLength = options?.minLength ?? Math.max(110, this.length - 60);
+    this.maxLength = options?.maxLength ?? this.length + 30;
+    this.visual = scene.add.graphics().setDepth(3);
+    this.redraw();
+  }
+
+  get handX(): number {
+    return this.anchorX + Math.sin(this.angle) * this.length;
+  }
+
+  get handY(): number {
+    return this.anchorY + Math.cos(this.angle) * this.length;
+  }
+
+  get available(): boolean {
+    return this.scene.time.now >= this.cooldownUntil;
+  }
+
+  /** 抓住瞬间带入水平动量，自然起摆 */
+  grab(carryVelocityX: number): void {
+    const dir = carryVelocityX >= 0 ? 1 : -1;
+    this.angle = 0.18 * dir;
+    this.angVel = (carryVelocityX / this.length) * 0.65;
+  }
+
+  /** 松手后短暂不可重抓，防止瞬间吸回去 */
+  startCooldown(ms = 450): void {
+    this.cooldownUntil = this.scene.time.now + ms;
+  }
+
+  update(deltaMs: number, input: VineSwingInput): void {
+    const dt = Math.min(deltaMs, 50) / 1000;
+
+    // 单摆：切向重力 + 玩家发力（靠近最低点发力最有效，像真实荡秋千）
+    const gravity = -(1400 / this.length) * Math.sin(this.angle);
+    const pump = input.dirX * 3.0 * Math.cos(this.angle);
+    this.angVel += (gravity + pump) * dt;
+    this.angVel *= 0.996;
+    this.angVel = Phaser.Math.Clamp(this.angVel, -3.2, 3.2);
+
+    this.angle += this.angVel * dt;
+    if (Math.abs(this.angle) > 1.15) {
+      this.angle = Phaser.Math.Clamp(this.angle, -1.15, 1.15);
+      this.angVel *= -0.25;
+    }
+
+    // 上下爬改变绳长（越短摆得越快）
+    this.length = Phaser.Math.Clamp(
+      this.length + input.climb * 90 * dt,
+      this.minLength,
+      this.maxLength,
+    );
+
+    this.redraw();
+  }
+
+  /** 松手时的甩出速度：切向速度 + 少量向上助力 */
+  releaseVelocity(): { vx: number; vy: number } {
+    const tangential = this.angVel * this.length;
+    return {
+      vx: Math.cos(this.angle) * tangential * 1.15,
+      vy: -Math.sin(this.angle) * tangential * 1.15 - 220,
+    };
+  }
+
+  private redraw(): void {
+    const g = this.visual;
+    g.clear();
+    const handX = this.handX;
+    const handY = this.handY;
+
+    // 主茎：带一点弧度（三段折线近似）
+    g.lineStyle(6, 0x3f6b4f, 1);
+    const midX = (this.anchorX + handX) / 2 - Math.sin(this.angle) * 8;
+    const midY = (this.anchorY + handY) / 2;
+    g.beginPath();
+    g.moveTo(this.anchorX, this.anchorY);
+    g.lineTo(midX, midY);
+    g.lineTo(handX, handY);
+    g.strokePath();
+
+    // 叶片沿茎交替分布
+    g.fillStyle(0x4a7a5c, 1);
+    for (const t of [0.3, 0.5, 0.7, 0.88]) {
+      const lx = Phaser.Math.Linear(this.anchorX, handX, t) + (t > 0.5 ? -6 : 6);
+      const ly = Phaser.Math.Linear(this.anchorY, handY, t);
+      g.fillEllipse(lx, ly, 14, 7);
+    }
+
+    // 末端小结（提示握点）
+    g.fillStyle(0xe6cf97, 0.85);
+    g.fillCircle(handX, handY, 4);
+  }
+}
