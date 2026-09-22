@@ -3,9 +3,9 @@ import { Player } from '../gameplay/Player';
 import { Terrain } from '../gameplay/Terrain';
 import { Effects } from '../gameplay/Effects';
 import { Sfx } from '../systems/Sfx';
+import { applyHDCamera, HD_SCALE } from '../systems/Resolution';
 import { Vine } from '../gameplay/Vine';
 import { Flower } from '../gameplay/Flower';
-import { RespawnPoint } from '../gameplay/RespawnPoint';
 
 const WORLD_WIDTH = 2880;
 const WORLD_HEIGHT = 640;
@@ -23,8 +23,6 @@ export default class ForestScene extends Phaser.Scene {
   private sfx!: Sfx;
   private vines: Vine[] = [];
   private flowers: Flower[] = [];
-  private respawnPoints: RespawnPoint[] = [];
-  private currentRespawn!: RespawnPoint;
   private lastFlower: Flower | null = null;
 
   private medicineVisual!: Phaser.GameObjects.Container;
@@ -57,6 +55,27 @@ export default class ForestScene extends Phaser.Scene {
     });
   }
 
+  preload(): void {
+    const base = 'assets/character/';
+    this.load.spritesheet('char-yuyu-idle', `${base}char-yuyu-idle-right-96x112-4f.png`, {
+      frameWidth: 96,
+      frameHeight: 112,
+    });
+    this.load.spritesheet('char-yuyu-run', `${base}char-yuyu-run-right-96x112-8f.png`, {
+      frameWidth: 96,
+      frameHeight: 112,
+    });
+    this.load.spritesheet('char-yuyu-jump', `${base}char-yuyu-jump-right-96x112-4f.png`, {
+      frameWidth: 96,
+      frameHeight: 112,
+    });
+    this.load.spritesheet('char-yuyu-fall', `${base}char-yuyu-fall-right-96x112-4f.png`, {
+      frameWidth: 96,
+      frameHeight: 112,
+    });
+    this.load.image('env-forest-bg', 'assets/environment/env-forest-no-slope-1920x1080.jpg');
+  }
+
   create(): void {
     // 场景实例在重玩时会被复用，属性初始化器不会重新执行：
     // 所有玩法状态必须在这里重置（AGENTS.md 第 5 节），否则重玩卡死
@@ -68,29 +87,25 @@ export default class ForestScene extends Phaser.Scene {
     this.lastFlower = null;
     this.vines = [];
     this.flowers = [];
-    this.respawnPoints = [];
 
+    applyHDCamera(this);
     this.cameras.main.setBackgroundColor('#17382b');
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, true, true, false, false);
 
-    // 背景由远及近：天空渐变 → 飘雾 → 远山两层 → 灌木 → 树
+    // 背景由远及近：天空渐变 → 吉卜力森林背景（B 素材，铺满）→ 树
     this.buildSky();
-    this.buildMist();
-    this.buildBackground();
-    this.buildBushes();
+    this.buildArtBackdrop();
     this.buildTrees();
     this.buildVineBranch();
     this.buildTerrain();
     this.buildPlayer();
     this.buildFlowers();
     this.buildVines();
-    this.buildRespawnPoints();
     this.buildItems();
     this.buildDoor();
     this.setupCamera();
     this.buildHud();
     this.buildItemHud();
-    this.buildVignette();
     Effects.fireflies(this, WORLD_WIDTH, 16);
 
     this.cameras.main.fadeIn(250, 23, 56, 43);
@@ -104,7 +119,6 @@ export default class ForestScene extends Phaser.Scene {
     this.player.update(delta);
     this.updateFlowerContact();
     this.updateVineGrabCheck();
-    this.updateRespawns();
     this.updateHintZone();
     this.updateCameraLookahead(delta);
     this.checkFall();
@@ -119,59 +133,18 @@ export default class ForestScene extends Phaser.Scene {
     sky.fillRect(0, 0, 960, 80);
   }
 
-  /** 近天飘雾，极慢横向漂移 */
-  private buildMist(): void {
-    for (let i = 0; i < 3; i++) {
-      const mist = this.add
-        .ellipse(220 + i * 340, 180 + i * 62, 260 + i * 70, 34 + i * 8, 0xbfd8c6, 0.06)
-        .setScrollFactor(0.06 + i * 0.03)
-        .setDepth(-9);
-      this.tweens.add({
-        targets: mist,
-        x: mist.x + 90,
-        duration: 9000 + i * 3500,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
-    }
-  }
-
-  /** 远山两层，慢速视差 */
-  private buildBackground(): void {
-    this.buildHillLayer(0.15, 0x1d4433, 400, 220, 0, -8);
-    this.buildHillLayer(0.35, 0x244f3b, 470, 180, 70, -7);
-  }
-
-  private buildHillLayer(
-    scrollFactor: number,
-    color: number,
-    baseY: number,
-    amplitude: number,
-    shift: number,
-    depth: number,
-  ): void {
-    const width = 960 + (WORLD_WIDTH - 960) * scrollFactor + 240;
-    const g = this.add.graphics().setScrollFactor(scrollFactor).setDepth(depth);
-    g.fillStyle(color, 1);
-    for (let x = -120; x < width + 120; x += 210) {
-      const w = 320 + ((x + shift) % 90);
-      const h = amplitude + ((x + shift) % 60);
-      g.fillEllipse(x, baseY, w, h);
-    }
-    g.fillRect(0, baseY, width, WORLD_HEIGHT + 200 - baseY);
-  }
-
-  /** 灌木层：比远山更近，贴着地平线 */
-  private buildBushes(): void {
-    const factor = 0.6;
-    const width = 960 + (WORLD_WIDTH - 960) * factor + 200;
-    const g = this.add.graphics().setScrollFactor(factor).setDepth(-5);
-    g.fillStyle(0x1f4032, 1);
-    for (let x = -60; x < width; x += 92) {
-      const r = 26 + ((x * 7) % 22);
-      g.fillEllipse(x, 562, r * 2, r);
-    }
+  /**
+   * B 的森林背景图作远景主层：静止铺满视口。相机 zoom 2 下 scrollFactor 0 的层
+   * 按"世界尺寸 1:1 投到渲染缓冲"（实测），故 scale 1 → 1920×1080 源像素 1:1 原生清晰。
+   * （原雾/灌木视差层与 zoom 组合会错位，已移除；深度感由背景图与树/萤火虫承担。）
+   */
+  private buildArtBackdrop(): void {
+    this.add
+      .image(0, 0, 'env-forest-bg')
+      .setOrigin(0, 0)
+      .setScale(1.02)
+      .setScrollFactor(0)
+      .setDepth(-9);
   }
 
   /** 世界层装饰树（无碰撞，位于角色身后） */
@@ -248,16 +221,6 @@ export default class ForestScene extends Phaser.Scene {
       new Vine(this, 980, 140, { length: 190 }),
       new Vine(this, 1200, 135, { length: 200 }),
     ];
-  }
-
-  private buildRespawnPoints(): void {
-    const start = new RespawnPoint(this, 120, GROUND_TOP);
-    start.activateNow(this);
-    this.respawnPoints = [
-      start,
-      new RespawnPoint(this, 1490, 470), // 藤蔓谷对岸落脚台
-    ];
-    this.currentRespawn = start;
   }
 
   private buildItems(): void {
@@ -349,29 +312,35 @@ export default class ForestScene extends Phaser.Scene {
     cam.followOffset.x += (targetX - cam.followOffset.x) * Math.min(1, delta * 0.004);
   }
 
+  /** HUD 层：scrollFactor 0 + 按 HD_SCALE 放大，抵消相机 zoom 对 HUD 造成的缩小 */
+  private hudLayer!: Phaser.GameObjects.Container;
+
   private buildHud(): void {
-    this.hintText = this.add
-      .text(16, 14, '', {
-        fontFamily: 'sans-serif',
-        fontSize: '15px',
-        color: '#d3ddd5',
-        backgroundColor: 'rgba(0, 0, 0, 0.33)',
-        padding: { x: 10, y: 6 },
-      })
+    this.hudLayer = this.add
+      .container(0, 0)
       .setScrollFactor(0)
-      .setDepth(100);
+      .setDepth(100)
+      .setScale(HD_SCALE);
+    this.hintText = this.add.text(16, 14, '', {
+      fontFamily: 'sans-serif',
+      fontSize: '15px',
+      color: '#d3ddd5',
+      backgroundColor: 'rgba(0, 0, 0, 0.33)',
+      padding: { x: 10, y: 6 },
+    });
+    this.hudLayer.add(this.hintText);
   }
 
   /** 右上角已获得物品图标（钥匙 / 药） */
   private buildItemHud(): void {
-    this.hudHerb = this.add.container(904, 28).setScrollFactor(0).setDepth(100).setVisible(false);
+    this.hudHerb = this.add.container(904, 28).setVisible(false);
     this.hudHerb.add([
       this.add.rectangle(0, 0, 10, 16, 0xf2efe4).setStrokeStyle(1.5, 0x8a6d3b, 0.9),
       this.add.rectangle(0, 3, 6, 8, GOLD),
       this.add.rectangle(0, -10, 5, 5, 0x8a6d3b),
     ]);
 
-    this.hudKey = this.add.container(932, 28).setScrollFactor(0).setDepth(100).setVisible(false);
+    this.hudKey = this.add.container(932, 28).setVisible(false);
     const keyIcon = this.add.graphics();
     keyIcon.lineStyle(3, GOLD, 1);
     keyIcon.strokeCircle(-3, -4, 4);
@@ -379,23 +348,7 @@ export default class ForestScene extends Phaser.Scene {
     keyIcon.fillRect(-1, -1, 2, 9);
     keyIcon.fillRect(1, 4, 4, 2);
     this.hudKey.add([keyIcon]);
-  }
-
-  /** 四周轻暗角，收敛视觉焦点 */
-  private buildVignette(): void {
-    if (!this.textures.exists('vignette')) {
-      const texture = this.textures.createCanvas('vignette', 960, 540);
-      const ctx = texture?.getContext();
-      if (texture && ctx) {
-        const gradient = ctx.createRadialGradient(480, 270, 210, 480, 270, 560);
-        gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-        gradient.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, 960, 540);
-        texture.refresh();
-      }
-    }
-    this.add.image(480, 270, 'vignette').setScrollFactor(0).setDepth(90);
+    this.hudLayer.add([this.hudHerb, this.hudKey]);
   }
 
   private showHint(message: string): void {
@@ -471,17 +424,7 @@ export default class ForestScene extends Phaser.Scene {
     }
   }
 
-  private updateRespawns(): void {
-    for (const point of this.respawnPoints) {
-      if (point.tryActivate(this, this.player.view.x, this.player.view.y)) {
-        this.currentRespawn = point;
-        this.sfx.checkpoint();
-        this.showHint('重生点已点亮');
-      }
-    }
-  }
-
-  /** 掉出地图：回到已激活的重生点，钥匙等进度保留 */
+  /** 掉出地图：整关完全重置（2026-09-22 决定，钥匙/药/门等全部回到初始） */
   private checkFall(): void {
     if (this.restarting || this.player.view.y <= KILL_Y) {
       return;
@@ -489,13 +432,7 @@ export default class ForestScene extends Phaser.Scene {
     this.restarting = true;
     this.sfx.fall();
     this.cameras.main.fade(280, 10, 20, 15);
-    this.cameras.main.once('camerafadeoutcomplete', () => {
-      const spawn = this.currentRespawn;
-      this.player.teleportTo(spawn.x, spawn.y);
-      this.cameras.main.centerOn(spawn.x, spawn.y - 60);
-      this.cameras.main.fadeIn(280, 23, 56, 43);
-      this.restarting = false;
-    });
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.restart());
   }
 
   private collectMedicine(): void {

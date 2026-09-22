@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { playMenuRoomMusic } from '../MenuRoomMusic';
+import { applyHDCamera } from '../systems/Resolution';
 
 export default class EndingScene extends Phaser.Scene {
   constructor() {
@@ -7,6 +8,7 @@ export default class EndingScene extends Phaser.Scene {
   }
 
   create() {
+    applyHDCamera(this);
     this.cameras.main.setBackgroundColor('#10151c');
 
     const title = this.add.text(480, 190, '结尾动画', {
