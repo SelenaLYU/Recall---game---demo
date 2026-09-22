@@ -35,6 +35,8 @@ export default class ForestScene extends Phaser.Scene {
   private hintText!: Phaser.GameObjects.Text;
   private hudKey!: Phaser.GameObjects.Container;
   private hudHerb!: Phaser.GameObjects.Container;
+  private forestMusic?: Phaser.Sound.BaseSound;
+  private forestMusicUnlock?: () => void;
 
   private hasKey = false;
   private hasMedicine = false;
@@ -74,6 +76,38 @@ export default class ForestScene extends Phaser.Scene {
       frameHeight: 112,
     });
     this.load.image('env-forest-bg', 'assets/environment/env-forest-no-slope-1920x1080.jpg');
+    this.load.audio('forest-bgm', 'assets/audio/forest-bgm.mp3');
+  }
+
+  /** 森林专属配乐：首次用户操作后解锁，离开森林时停止并清理。 */
+  private startForestMusic(): void {
+    this.stopForestMusic();
+    this.forestMusic = this.sound.add('forest-bgm', { loop: true, volume: 0.35 });
+
+    const start = () => {
+      if (this.forestMusic && !this.forestMusic.isPlaying) {
+        this.forestMusic.play();
+      }
+    };
+    this.forestMusicUnlock = start;
+
+    if (this.sound.locked) {
+      this.sound.once(Phaser.Sound.Events.UNLOCKED, start);
+    } else {
+      start();
+    }
+  }
+
+  private stopForestMusic(): void {
+    if (this.forestMusicUnlock) {
+      this.sound.off(Phaser.Sound.Events.UNLOCKED, this.forestMusicUnlock);
+      this.forestMusicUnlock = undefined;
+    }
+    if (this.forestMusic) {
+      this.forestMusic.stop();
+      this.forestMusic.destroy();
+      this.forestMusic = undefined;
+    }
   }
 
   create(): void {
@@ -87,6 +121,10 @@ export default class ForestScene extends Phaser.Scene {
     this.lastFlower = null;
     this.vines = [];
     this.flowers = [];
+
+    this.startForestMusic();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.stopForestMusic, this);
+    this.events.once(Phaser.Scenes.Events.DESTROY, this.stopForestMusic, this);
 
     applyHDCamera(this);
     this.cameras.main.setBackgroundColor('#17382b');

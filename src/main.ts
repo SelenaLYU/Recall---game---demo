@@ -4,6 +4,7 @@ import RoomScene from './scenes/RoomScene';
 import EndingScene from './scenes/EndingScene';
 import { preloadMenuRoomMusic, playMenuRoomMusic } from './MenuRoomMusic';
 import { BASE_WIDTH, BASE_HEIGHT, HD_SCALE, applyHDCamera } from './systems/Resolution';
+import menuBackgroundUrl from '../assets/environment/森林花海_原场景清晰化_无坡_1920x1080_v2.png?url';
 // 第一个场景：开始画面
 class MenuScene extends Phaser.Scene {
   constructor() {
@@ -12,6 +13,7 @@ class MenuScene extends Phaser.Scene {
 
   preload() {
     preloadMenuRoomMusic(this);
+    this.load.image('ui-menu-background', menuBackgroundUrl);
   }
 
   create() {
@@ -26,15 +28,40 @@ class MenuScene extends Phaser.Scene {
     applyHDCamera(this);
     this.cameras.main.setBackgroundColor('#15251f');
 
+    // 背景留出 4% 的边缘余量，轻微移动时不会露出画布底色。
+    const menuBackground = this.add.image(BASE_WIDTH / 2 - 3, BASE_HEIGHT / 2 + 4, 'ui-menu-background')
+      .setDisplaySize(BASE_WIDTH * 1.04, BASE_HEIGHT * 1.04)
+      .setDepth(-20);
+
+    // 18 秒往返一轮：背景缓慢起伏、轻微推近，按钮和文字保持固定。
+    // Tween 属于菜单场景，退出菜单后由 Phaser 自动清理。
+    this.tweens.add({
+      targets: menuBackground,
+      x: BASE_WIDTH / 2 + 3,
+      y: BASE_HEIGHT / 2 - 4,
+      scaleX: menuBackground.scaleX * 1.015,
+      scaleY: menuBackground.scaleY * 1.015,
+      duration: 9000,
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      repeat: -1,
+    });
+
+    // 轻压暗背景，并为操作说明加底色，让文字在花海上仍然清楚。
+    this.add.rectangle(BASE_WIDTH / 2, BASE_HEIGHT / 2, BASE_WIDTH, BASE_HEIGHT, 0x0b1712, 0.22)
+      .setDepth(-19);
+    this.add.rectangle(480, 484, 860, 104, 0x10251d, 0.65)
+      .setDepth(-18);
+
     this.add.text(480, 170, 'RECALL', {
       fontSize: '64px',
       color: '#e6cf97',
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setShadow(0, 2, '#0b1712', 6, false, true);
 
     this.add.text(480, 250, '2D 解谜冒险 Demo', {
       fontSize: '22px',
       color: '#d3ddd5',
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setShadow(0, 2, '#0b1712', 4, false, true);
     this.add.text(480, 440, [
       '移动：A / D 或 ← / →　跳跃：空格，空中可再跳一次',
       '空中靠近藤蔓自动抓住：A / D 摆荡，W / S 攀爬，空格松手',
