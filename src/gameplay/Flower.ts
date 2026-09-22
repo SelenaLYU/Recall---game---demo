@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { Effects } from './Effects';
 
 /**
  * 大花平台：可以踩的花（参考小咪的 3D 花设定，程序化占位）。
@@ -50,6 +51,9 @@ export class Flower {
       .circle(0, 0, 15, bouncy ? 0xe8b04c : 0xe6cf97)
       .setStrokeStyle(2, 0x8a6d3b, 0.8);
     this.head = scene.add.container(x, top, [this.petals, center]).setDepth(2);
+    if (bouncy) {
+      Effects.glow(scene, this.head, 0xf2c6d4);
+    }
 
     // 碰撞体：花心附近的薄静态矩形
     this.body = scene.add

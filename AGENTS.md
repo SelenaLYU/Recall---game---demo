@@ -88,6 +88,13 @@
 - 镜头：`startFollow(roundPixels=true, lerp≈0.1)` + `setDeadzone`，保证像素清晰、不抖。
 - 纹理 key 命名：`char-yuyu-*`（角色帧）、`env-*`（环境）、`item-*`（物品），占位纹理以 `placeholder-` 开头，避免和正式素材冲突。
 
+### 光影与后期（2026-09-22 定稿）
+
+- 渲染清晰度：`scale.zoom = min(devicePixelRatio, 2)`——高分屏按 2 倍渲染缓冲绘制，逻辑坐标 960×540 不变，避免 FIT 拉伸发虚。改的是 `main.ts`（D 的文件），此约定即 C/D 的 agreed 配置。
+- 后期管线（仅 WebGL，Canvas 自动降级）：相机级 ColorMatrix 轻微增饱和/对比（multiply 累积）+ 管线暗角（WebGL 下不再用 canvas 渐变暗角图）。
+- 金色发光物（钥匙/药/门/重生点/弹跳花/记忆球）统一用 `Effects.glow` 挂对象级 Bloom；Canvas 降级时靠现有发光椭圆。
+- 光影约定：森林光柱 = ADD 混合低透明斜四边形（scrollFactor≈0.55，慢呼吸）；角色脚下常驻软阴影（落地 0.28 / 空中 0.12 / 挂藤 0.10）。
+
 ## 7. 素材缺口清单（B 按此补齐，到货一项勾一项并更新本节；具体任务见仓库 Issues）
 
 **已有**：`assets/character/` 下 4 张 2752×1536 三视图设定稿（鱼鱼-F1 / 鱼鱼-小黄衣 / 外公-回南城 / 外公-夹克，水彩风）——设定参考，不是可直接进引擎的素材。

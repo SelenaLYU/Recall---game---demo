@@ -75,6 +75,7 @@ export class Player {
   private readonly torso: Phaser.GameObjects.Rectangle;
   private readonly legLeft: Phaser.GameObjects.Rectangle;
   private readonly legRight: Phaser.GameObjects.Rectangle;
+  private readonly shadow: Phaser.GameObjects.Ellipse;
 
   private coyoteTimer = 0;
   private jumpBufferTimer = 0;
@@ -128,7 +129,10 @@ export class Player {
       .setOrigin(0.5, 0)
       .setStrokeStyle(1, 0x2f4254, 0.7);
 
+    // 脚下软阴影：给角色“落地感”（落地实、空中淡）
+    this.shadow = scene.add.ellipse(0, 29, 24, 7, 0x0b170f, 0.28);
     this.view = scene.add.container(options.x, options.y, [
+      this.shadow,
       legLeft,
       legRight,
       torso,
@@ -305,12 +309,13 @@ export class Player {
     this.body.setVelocity(0, 0);
     this.body.enable = false;
     this.opts.sfx?.grab();
-    // 悬挂姿势：双腿微收
+    // 悬挂姿势：双腿微收，阴影淡出
     this.legLeft.rotation = -0.35;
     this.legRight.rotation = -0.18;
     this.torso.rotation = 0;
     this.headGroup.y = -19;
     this.torso.y = -6;
+    this.shadow.setAlpha(0.1);
     this.view.setRotation(0);
   }
 
@@ -397,6 +402,7 @@ export class Player {
 
   /** 程序化占位动画：跑步摆腿 / 待机呼吸 / 空中姿势 / 下落伸展 */
   private animate(delta: number, onGround: boolean): void {
+    this.shadow.setAlpha(onGround ? 0.28 : 0.12);
     const speedRatio =
       this.opts.speed === 0 ? 0 : Math.min(1, Math.abs(this.body.velocity.x) / this.opts.speed);
 

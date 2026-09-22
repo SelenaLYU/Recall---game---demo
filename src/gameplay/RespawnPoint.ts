@@ -22,6 +22,7 @@ export class RespawnPoint {
       .setStrokeStyle(2, 0x11251d, 0.6)
       .setDepth(2);
     this.glow = scene.add.ellipse(x, baseY - 16, 34, 44, 0xe6cf97, 0.12).setDepth(1);
+    Effects.glow(scene, this.glow);
 
     // 待机呼吸（未激活时极弱）
     scene.tweens.add({
