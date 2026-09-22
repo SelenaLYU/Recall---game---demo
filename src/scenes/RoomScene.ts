@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { applyHDCamera } from '../systems/Resolution';
 
 export default class RoomScene extends Phaser.Scene {
   constructor() {
@@ -6,6 +7,7 @@ export default class RoomScene extends Phaser.Scene {
   }
 
   create() {
+    applyHDCamera(this);
     // 房间墙壁
     this.cameras.main.setBackgroundColor('#302b36');
 

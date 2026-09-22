@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import ForestScene from './scenes/ForestScene';
 import RoomScene from './scenes/RoomScene';
 import EndingScene from './scenes/EndingScene';
+import { BASE_WIDTH, BASE_HEIGHT, HD_SCALE, applyHDCamera } from './systems/Resolution';
 // 第一个场景：开始画面
 class MenuScene extends Phaser.Scene {
   constructor() {
@@ -9,6 +10,7 @@ class MenuScene extends Phaser.Scene {
   }
 
   create() {
+    applyHDCamera(this);
     this.cameras.main.setBackgroundColor('#15251f');
 
     this.add.text(480, 170, 'RECALL', {
@@ -51,6 +53,7 @@ class IntroScene extends Phaser.Scene {
   }
 
   create() {
+    applyHDCamera(this);
     this.cameras.main.setBackgroundColor('#10151c');
 
     this.add.text(480, 230, '开场动画', {
@@ -93,14 +96,13 @@ document.getElementById('game')!.style.height = '100vh';
 new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
-  width: 960,
-  height: 540,
+  // 渲染缓冲按设备像素比放大（上限 2x）：逻辑坐标仍是 960×540（相机 zoom 反向缩放），
+  // 高分屏上不再被浏览器拉伸发糊。scale.zoom 在 FIT 模式下不生效，勿改回（实测）。
+  width: Math.round(BASE_WIDTH * HD_SCALE),
+  height: Math.round(BASE_HEIGHT * HD_SCALE),
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
-    // 高分屏按设备像素比放大渲染缓冲（上限 2x）：逻辑坐标 960×540 不变，
-    // 画布按 2 倍实际绘制，消除 FIT 拉伸的整体发糊（此前随画质 PR 回退，按新需求恢复）
-    zoom: Math.min(window.devicePixelRatio || 1, 2),
   },
   render: { antialias: true, powerPreference: 'high-performance' },
   scene: [MenuScene, IntroScene, ForestScene, RoomScene, EndingScene],
