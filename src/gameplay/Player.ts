@@ -44,11 +44,14 @@ const ANIM_DEFS = [
   { key: 'yuyu-idle', texture: 'char-yuyu-idle', end: 3, frameRate: 6, repeat: -1 },
   { key: 'yuyu-run', texture: 'char-yuyu-run', end: 7, frameRate: 13, repeat: -1 },
   { key: 'yuyu-jump', texture: 'char-yuyu-jump', end: 3, frameRate: 14, repeat: 0 },
-  { key: 'yuyu-fall', texture: 'char-yuyu-fall', end: 3, frameRate: 10, repeat: -1 },
+  { key: 'yuyu-fall', texture: 'char-yuyu-fall', end: 3, frameRate: 8, repeat: 0 },
 ] as const;
 
-/** 序列帧单帧 96×112，缩放后角色视觉高约 67px（碰撞体 28×60，头部略高出盒属正常） */
-const SPRITE_SCALE = 0.6;
+/**
+ * 序列帧单帧 96×112，缩放后角色视觉高约 81px（碰撞体 28×60，头/脚略溢出盒属正常，
+ * 碰撞盒小于视觉对玩家更友好）。0.6 时角色偏小不易辨认，0.72 兼顾辨识度与碰撞准度。
+ */
+const SPRITE_SCALE = 0.72;
 
 /**
  * 角色控制器：输入、物理与跳跃手感。

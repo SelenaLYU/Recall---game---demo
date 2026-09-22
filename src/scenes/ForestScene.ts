@@ -5,7 +5,6 @@ import { Effects } from '../gameplay/Effects';
 import { Sfx } from '../systems/Sfx';
 import { Vine } from '../gameplay/Vine';
 import { Flower } from '../gameplay/Flower';
-import { RespawnPoint } from '../gameplay/RespawnPoint';
 
 const WORLD_WIDTH = 2880;
 const WORLD_HEIGHT = 640;
@@ -23,8 +22,6 @@ export default class ForestScene extends Phaser.Scene {
   private sfx!: Sfx;
   private vines: Vine[] = [];
   private flowers: Flower[] = [];
-  private respawnPoints: RespawnPoint[] = [];
-  private currentRespawn!: RespawnPoint;
   private lastFlower: Flower | null = null;
 
   private medicineVisual!: Phaser.GameObjects.Container;
@@ -89,16 +86,14 @@ export default class ForestScene extends Phaser.Scene {
     this.lastFlower = null;
     this.vines = [];
     this.flowers = [];
-    this.respawnPoints = [];
 
     this.cameras.main.setBackgroundColor('#17382b');
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, true, true, false, false);
 
-    // 背景由远及近：天空渐变 → 吉卜力森林背景（B 素材）→ 飘雾 → 远山两层 → 灌木 → 树
+    // 背景由远及近：天空渐变 → 吉卜力森林背景（B 素材，远景主层）→ 飘雾 → 灌木 → 树
     this.buildSky();
     this.buildArtBackdrop();
     this.buildMist();
-    this.buildBackground();
     this.buildBushes();
     this.buildTrees();
     this.buildVineBranch();
@@ -106,7 +101,6 @@ export default class ForestScene extends Phaser.Scene {
     this.buildPlayer();
     this.buildFlowers();
     this.buildVines();
-    this.buildRespawnPoints();
     this.buildItems();
     this.buildDoor();
     this.setupCamera();
@@ -126,7 +120,6 @@ export default class ForestScene extends Phaser.Scene {
     this.player.update(delta);
     this.updateFlowerContact();
     this.updateVineGrabCheck();
-    this.updateRespawns();
     this.updateHintZone();
     this.updateCameraLookahead(delta);
     this.checkFall();
@@ -139,16 +132,6 @@ export default class ForestScene extends Phaser.Scene {
     sky.fillRect(0, 0, 960, 540);
     sky.fillStyle(0x2d5a44, 0.3);
     sky.fillRect(0, 0, 960, 80);
-  }
-
-  /** B 的森林背景图作远景层：慢视差，垫在飘雾/远山之后（1920×1080 按 0.8 缩放） */
-  private buildArtBackdrop(): void {
-    this.add
-      .image(-60, -170, 'env-forest-bg')
-      .setOrigin(0, 0)
-      .setScale(0.8)
-      .setScrollFactor(0.22)
-      .setDepth(-9);
   }
 
   /** 近天飘雾，极慢横向漂移 */
@@ -169,29 +152,14 @@ export default class ForestScene extends Phaser.Scene {
     }
   }
 
-  /** 远山两层，慢速视差 */
-  private buildBackground(): void {
-    this.buildHillLayer(0.15, 0x1d4433, 400, 220, 0, -8);
-    this.buildHillLayer(0.35, 0x244f3b, 470, 180, 70, -7);
-  }
-
-  private buildHillLayer(
-    scrollFactor: number,
-    color: number,
-    baseY: number,
-    amplitude: number,
-    shift: number,
-    depth: number,
-  ): void {
-    const width = 960 + (WORLD_WIDTH - 960) * scrollFactor + 240;
-    const g = this.add.graphics().setScrollFactor(scrollFactor).setDepth(depth);
-    g.fillStyle(color, 1);
-    for (let x = -120; x < width + 120; x += 210) {
-      const w = 320 + ((x + shift) % 90);
-      const h = amplitude + ((x + shift) % 60);
-      g.fillEllipse(x, baseY, w, h);
-    }
-    g.fillRect(0, baseY, width, WORLD_HEIGHT + 200 - baseY);
+  /** B 的森林背景图作远景主层：慢视差（原程序化山影层已移除，避免遮挡素材） */
+  private buildArtBackdrop(): void {
+    this.add
+      .image(-60, -170, 'env-forest-bg')
+      .setOrigin(0, 0)
+      .setScale(0.8)
+      .setScrollFactor(0.22)
+      .setDepth(-9);
   }
 
   /** 灌木层：比远山更近，贴着地平线 */
@@ -280,16 +248,6 @@ export default class ForestScene extends Phaser.Scene {
       new Vine(this, 980, 140, { length: 190 }),
       new Vine(this, 1200, 135, { length: 200 }),
     ];
-  }
-
-  private buildRespawnPoints(): void {
-    const start = new RespawnPoint(this, 120, GROUND_TOP);
-    start.activateNow(this);
-    this.respawnPoints = [
-      start,
-      new RespawnPoint(this, 1490, 470), // 藤蔓谷对岸落脚台
-    ];
-    this.currentRespawn = start;
   }
 
   private buildItems(): void {
@@ -503,17 +461,7 @@ export default class ForestScene extends Phaser.Scene {
     }
   }
 
-  private updateRespawns(): void {
-    for (const point of this.respawnPoints) {
-      if (point.tryActivate(this, this.player.view.x, this.player.view.y)) {
-        this.currentRespawn = point;
-        this.sfx.checkpoint();
-        this.showHint('重生点已点亮');
-      }
-    }
-  }
-
-  /** 掉出地图：回到已激活的重生点，钥匙等进度保留 */
+  /** 掉出地图：整关完全重置（2026-09-22 决定，钥匙/药/门等全部回到初始） */
   private checkFall(): void {
     if (this.restarting || this.player.view.y <= KILL_Y) {
       return;
@@ -521,13 +469,7 @@ export default class ForestScene extends Phaser.Scene {
     this.restarting = true;
     this.sfx.fall();
     this.cameras.main.fade(280, 10, 20, 15);
-    this.cameras.main.once('camerafadeoutcomplete', () => {
-      const spawn = this.currentRespawn;
-      this.player.teleportTo(spawn.x, spawn.y);
-      this.cameras.main.centerOn(spawn.x, spawn.y - 60);
-      this.cameras.main.fadeIn(280, 23, 56, 43);
-      this.restarting = false;
-    });
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.restart());
   }
 
   private collectMedicine(): void {
