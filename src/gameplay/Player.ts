@@ -1,46 +1,95 @@
 import Phaser from 'phaser';
+import { Effects } from './Effects';
+import { Vine } from './Vine';
 
 export type PlayerState = 'idle' | 'run' | 'jump' | 'fall';
+
+/** Player 用到的音效接口，Sfx 模块实现；测试或静音时可注入空实现 */
+export interface PlayerSfx {
+  jump(): void;
+  land(): void;
+  step(): void;
+  doubleJump(): void;
+  grab(): void;
+}
 
 export interface PlayerOptions {
   x: number;
   y: number;
-  /** 碰撞体尺寸（占位贴图同尺寸加 2px 描边余量） */
+  /** 碰撞体尺寸 */
   width?: number;
   height?: number;
   /** 水平速度 px/s */
   speed?: number;
   /** 起跳速度（负值向上） */
   jumpVelocity?: number;
-  /** 土狼时间：离地后仍可起跳的窗口 ms */
+  /** 土狼时间：离地后仍可起跳的窗口 ms（Celeste 同款宽容技巧） */
   coyoteMs?: number;
   /** 跳跃缓冲：落地前按跳、落地瞬间补跳的窗口 ms */
   jumpBufferMs?: number;
   /** 最大下落速度 */
   maxFallSpeed?: number;
+  /** 轻落地速度阈值（低于此值只做轻反馈） */
+  softLandThreshold?: number;
+  /** 重落地阈值（触发镜头微震） */
+  hardLandThreshold?: number;
+  sfx?: PlayerSfx;
 }
 
-const TEXTURE_KEY = 'placeholder-player';
-
 /**
- * 角色控制器：输入、物理与跳跃手感。
- * 场景在自己的 update() 里调用 player.update(delta) 驱动。
- * 美术到位后把 TEXTURE_KEY 换成正式序列帧/动画即可，数值不用动（见 AGENTS.md 素材清单）。
+ * 角色控制器：输入、物理、跳跃手感与程序化占位动画。
+ *
+ * 画面说明：当前角色是部件拼装的小人（头/发/黄衣/背带裤/双腿），
+ * 跑步摆腿、待机呼吸、空中姿势全部程序化驱动——B 的序列帧到位后，
+ * 把 buildParts 换成 sprite + animation 即可，物理与手感数值不动。
  */
 export class Player {
-  readonly sprite: Phaser.Physics.Arcade.Sprite;
+  /** 物理与视觉根节点（Container），场景对它建 collider/overlap/follow */
+  readonly view: Phaser.GameObjects.Container;
+
+  // —— 移动模型常量（调手感改这里）——
+  /** 地面/空中加速 px/s² */
+  private static readonly ACCEL_GROUND = 2600;
+  private static readonly ACCEL_AIR = 1900;
+  /** 无输入时地面/空中减速 px/s² */
+  private static readonly DECEL_GROUND = 3000;
+  private static readonly DECEL_AIR = 1400;
+  /** 急转变向的额外减速倍率 */
+  private static readonly TURN_BOOST = 1.8;
+  /** 下落加重（叠加在世界重力上，共 1.6×），跳跃弧线更漂亮 */
+  private static readonly FALL_GRAVITY_EXTRA = 840;
+  private static readonly SKID_DUST_MS = 320;
 
   state: PlayerState = 'idle';
   facing: -1 | 1 = 1;
 
   private readonly scene: Phaser.Scene;
-  private readonly opts: Required<PlayerOptions>;
+  private readonly opts: Required<Omit<PlayerOptions, 'sfx'>> & {
+    sfx?: PlayerSfx;
+  };
   private readonly keys: Record<string, Phaser.Input.Keyboard.Key>;
   private readonly body: Phaser.Physics.Arcade.Body;
+
+  // 程序化动画部件
+  private readonly headGroup: Phaser.GameObjects.Container;
+  private readonly torso: Phaser.GameObjects.Rectangle;
+  private readonly legLeft: Phaser.GameObjects.Rectangle;
+  private readonly legRight: Phaser.GameObjects.Rectangle;
+
   private coyoteTimer = 0;
   private jumpBufferTimer = 0;
   private wasOnGround = true;
+  private prevFallSpeed = 0;
   private frozen = false;
+  private squashing = false;
+  private runPhase = 0;
+  private breatheT = 0;
+  private stepCycle = 0;
+  private skidDustAt = 0;
+  private displayedFacing: -1 | 1 = 1;
+  /** 空中可用的二段跳次数（落地恢复） */
+  private airJumpsLeft = 0;
+  private attachedVine: Vine | null = null;
 
   constructor(scene: Phaser.Scene, options: PlayerOptions) {
     this.scene = scene;
@@ -49,23 +98,58 @@ export class Player {
       height: 60,
       speed: 240,
       jumpVelocity: -620,
-      coyoteMs: 100,
-      jumpBufferMs: 120,
-      maxFallSpeed: 900,
+      coyoteMs: 120,
+      jumpBufferMs: 140,
+      maxFallSpeed: 1000,
+      softLandThreshold: 220,
+      hardLandThreshold: 700,
       ...options,
     };
 
-    this.ensurePlaceholderTexture();
-    this.sprite = scene.physics.add.sprite(this.opts.x, this.opts.y, TEXTURE_KEY);
-    this.sprite.setCollideWorldBounds(true);
-    this.body = this.sprite.body as Phaser.Physics.Arcade.Body;
-    this.body.setSize(this.opts.width, this.opts.height, true);
+    // ---- 部件化占位小人（参考“鱼鱼-小黄衣”设定稿的配色） ----
+    const { width, height } = this.opts;
+    const headGroup = scene.add.container(0, -19);
+    const backHair = scene.add.rectangle(-6, 2, 6, 13, 0x4a3628);
+    const head = scene.add.circle(0, 0, 8, 0xf2d8b8).setStrokeStyle(1.5, 0xb99a72, 0.8);
+    const hairCap = scene.add.rectangle(0, -5, 16.5, 8, 0x4a3628);
+    const eye = scene.add.rectangle(5, 0.5, 2.5, 3.2, 0x2b2b2b);
+    headGroup.add([backHair, head, hairCap, eye]);
+
+    const torso = scene.add
+      .rectangle(0, -6, 15, 20, 0xf0d98c)
+      .setStrokeStyle(1.5, 0xb99a45, 0.8);
+    const bib = scene.add.rectangle(0, -1, 15, 11, 0x5a7d9a);
+    const legLeft = scene.add
+      .rectangle(-3.5, 8, 5, 19, 0x46617a)
+      .setOrigin(0.5, 0)
+      .setStrokeStyle(1, 0x2f4254, 0.7);
+    const legRight = scene.add
+      .rectangle(3.5, 8, 5, 19, 0x46617a)
+      .setOrigin(0.5, 0)
+      .setStrokeStyle(1, 0x2f4254, 0.7);
+
+    this.view = scene.add.container(options.x, options.y, [
+      legLeft,
+      legRight,
+      torso,
+      bib,
+      headGroup,
+    ]);
+    this.headGroup = headGroup;
+    this.torso = torso;
+    this.legLeft = legLeft;
+    this.legRight = legRight;
+
+    scene.physics.add.existing(this.view);
+    this.body = this.view.body as Phaser.Physics.Arcade.Body;
+    this.body.setSize(width, height, false);
+    this.body.setOffset(-width / 2, -height / 2);
+    this.body.setCollideWorldBounds(true);
 
     this.keys = scene.input.keyboard
-      ? (scene.input.keyboard.addKeys('A,D,W,LEFT,RIGHT,UP,SPACE') as Record<
-          string,
-          Phaser.Input.Keyboard.Key
-        >)
+      ? (scene.input.keyboard.addKeys(
+          'A,D,W,S,LEFT,RIGHT,UP,DOWN,SPACE',
+        ) as Record<string, Phaser.Input.Keyboard.Key>)
       : {};
   }
 
@@ -75,14 +159,24 @@ export class Player {
       return;
     }
 
+    if (this.attachedVine) {
+      this.updateVineGrab(delta);
+      return;
+    }
+
     const onGround = this.body.onFloor();
     const left = this.isDown('A') || this.isDown('LEFT');
     const right = this.isDown('D') || this.isDown('RIGHT');
+    const jumpHeld = this.isDown('SPACE') || this.isDown('W') || this.isDown('UP');
     const jumpPressed =
       this.justPressed('SPACE') || this.justPressed('W') || this.justPressed('UP');
     const jumpReleased =
       this.justReleased('SPACE') || this.justReleased('W') || this.justReleased('UP');
 
+    // 土狼时间 + 跳跃缓冲（Celeste “& Forgiveness” 同款宽容技巧）
+    if (onGround) {
+      this.airJumpsLeft = 1;
+    }
     this.coyoteTimer = onGround ? this.opts.coyoteMs : Math.max(0, this.coyoteTimer - delta);
     this.jumpBufferTimer = jumpPressed
       ? this.opts.jumpBufferMs
@@ -92,20 +186,68 @@ export class Player {
       this.body.setVelocityY(this.opts.jumpVelocity);
       this.jumpBufferTimer = 0;
       this.coyoteTimer = 0;
+      this.opts.sfx?.jump();
+      this.squash(0.88, 1.14);
+      Effects.dust(this.scene, this.view.x, this.view.y + this.opts.height / 2 - 2, 4, 16);
+    } else if (this.jumpBufferTimer > 0 && !onGround && this.airJumpsLeft > 0) {
+      // 二段跳：稍弱，空中翻滚一圈做辨识
+      this.airJumpsLeft -= 1;
+      this.jumpBufferTimer = 0;
+      this.body.setVelocityY(this.opts.jumpVelocity * 0.92);
+      this.opts.sfx?.doubleJump();
+      this.squash(0.9, 1.12);
+      Effects.ring(this.scene, this.view.x, this.view.y + this.opts.height / 2 - 6, 0xd8e8d0);
+      this.scene.tweens.add({
+        targets: this.view,
+        angle: this.facing * 360,
+        duration: 280,
+        ease: 'Quad.easeOut',
+        onComplete: () => this.view.setRotation(0),
+      });
     }
+
+    // 分段重力：半重力顶点（按住跳跃滞空更可控）+ 下落加重（弧线漂亮、落地更沉）
+    let extraGravity = 0;
+    if (!onGround) {
+      if (jumpHeld && this.body.velocity.y < 0 && this.body.velocity.y > -180) {
+        extraGravity = -700;
+      } else if (this.body.velocity.y > 120) {
+        extraGravity = Player.FALL_GRAVITY_EXTRA;
+      }
+    }
+    this.body.setGravityY(extraGravity);
 
     // 提前松键截断上升，形成轻重两档跳高
     if (jumpReleased && this.body.velocity.y < 0) {
       this.body.setVelocityY(this.body.velocity.y * 0.45);
     }
 
-    this.body.setVelocityX(right ? this.opts.speed : left ? -this.opts.speed : 0);
+    // 加速度/摩擦移动模型：起步加速、松键滑停、急转搓地，替代瞬变速度的僵硬感
+    const inputDir = (right ? 1 : 0) - (left ? 1 : 0);
+    let vx = this.body.velocity.x;
+    if (inputDir !== 0) {
+      const turning = Math.sign(inputDir) !== Math.sign(vx) && Math.abs(vx) > 120;
+      const accel = onGround ? Player.ACCEL_GROUND : Player.ACCEL_AIR;
+      vx += inputDir * (turning ? accel * Player.TURN_BOOST : accel) * (delta / 1000);
+      vx = Phaser.Math.Clamp(vx, -this.opts.speed, this.opts.speed);
+      if (turning && onGround && this.scene.time.now >= this.skidDustAt) {
+        this.skidDustAt = this.scene.time.now + Player.SKID_DUST_MS;
+        Effects.dust(this.scene, this.view.x, this.view.y + this.opts.height / 2 - 2, 3, 14);
+      }
+    } else {
+      const decel = (onGround ? Player.DECEL_GROUND : Player.DECEL_AIR) * (delta / 1000);
+      vx = Math.abs(vx) <= decel ? 0 : vx - Math.sign(vx) * decel;
+    }
+    this.body.setVelocityX(vx);
     if (right) {
       this.facing = 1;
     } else if (left) {
       this.facing = -1;
     }
-    this.sprite.setFlipX(this.facing === -1);
+    if (this.facing !== this.displayedFacing) {
+      this.displayedFacing = this.facing;
+      this.view.scaleX = this.facing;
+    }
 
     if (this.body.velocity.y > this.opts.maxFallSpeed) {
       this.body.setVelocityY(this.opts.maxFallSpeed);
@@ -119,42 +261,194 @@ export class Player {
         ? 'run'
         : 'idle';
 
-    // 落地轻微压扁再弹回，低成本落地反馈
+    // ---- 落地反馈：只在世界着地那一帧触发，强度随落速 ----
     if (onGround && !this.wasOnGround) {
-      this.sprite.setScale(1.18, 0.82);
-      this.scene.tweens.add({
-        targets: this.sprite,
-        scaleX: 1,
-        scaleY: 1,
-        duration: 140,
-        ease: 'Quad.easeOut',
-      });
+      const feetY = this.view.y + this.opts.height / 2 - 2;
+      if (this.prevFallSpeed > this.opts.hardLandThreshold) {
+        this.opts.sfx?.land();
+        Effects.dust(this.scene, this.view.x, feetY, 8, 34);
+        this.scene.cameras.main.shake(90, 0.003);
+        this.squash(1.22, 0.76);
+      } else if (this.prevFallSpeed > this.opts.softLandThreshold) {
+        this.opts.sfx?.land();
+        Effects.dust(this.scene, this.view.x, feetY, 5, 22);
+        this.squash(1.12, 0.85);
+      } else {
+        this.squash(1.05, 0.93);
+      }
     }
+    this.prevFallSpeed = onGround ? 0 : this.body.velocity.y;
     this.wasOnGround = onGround;
+
+    this.animate(delta, onGround);
   }
 
-  /** 进入门/演出时锁住角色：不再响应输入、不受重力 */
+  /** 进入门/演出时锁住角色：不响应输入、不受重力 */
   freeze(): void {
     this.frozen = true;
+    this.attachedVine?.startCooldown(0);
+    this.attachedVine = null;
+    this.body.enable = true;
     this.body.setAllowGravity(false);
+    this.body.setGravityY(0);
     this.body.setVelocity(0, 0);
   }
 
-  private ensurePlaceholderTexture(): void {
-    if (this.scene.textures.exists(TEXTURE_KEY)) {
+  get attached(): Vine | null {
+    return this.attachedVine;
+  }
+
+  /** 抓住藤蔓：停用物理体，由藤蔓摆荡驱动位置 */
+  attachVine(vine: Vine): void {
+    this.attachedVine = vine;
+    vine.grab(this.body.velocity.x);
+    this.body.setVelocity(0, 0);
+    this.body.enable = false;
+    this.opts.sfx?.grab();
+    // 悬挂姿势：双腿微收
+    this.legLeft.rotation = -0.35;
+    this.legRight.rotation = -0.18;
+    this.torso.rotation = 0;
+    this.headGroup.y = -19;
+    this.torso.y = -6;
+    this.view.setRotation(0);
+  }
+
+  /** 松手甩出：按藤蔓当前摆速的切向速度 + 向上助力 */
+  releaseVine(): void {
+    const vine = this.attachedVine;
+    if (!vine) {
       return;
     }
-    const { width, height } = this.opts;
-    const g = this.scene.add.graphics();
-    g.fillStyle(0xe6cf97, 1);
-    g.fillRect(2, 2, width, height);
-    g.lineStyle(2, 0x8a6d3b, 1);
-    g.strokeRect(2, 2, width, height);
-    // 朝向标记（右眼），flipX 时自动镜像
-    g.fillStyle(0x17382b, 1);
-    g.fillRect(width - 7, 12, 5, 6);
-    g.generateTexture(TEXTURE_KEY, width + 4, height + 4);
-    g.destroy();
+    const velocity = vine.releaseVelocity();
+    this.attachedVine = null;
+    vine.startCooldown();
+    this.body.enable = true;
+    this.body.setAllowGravity(true);
+    this.body.setVelocity(velocity.vx, velocity.vy);
+    this.wasOnGround = false;
+    this.prevFallSpeed = 0;
+    this.coyoteTimer = 0;
+    Effects.dust(this.scene, vine.handX, vine.handY + 10, 4, 14);
+  }
+
+  /** 死亡重生：传送回重生点并清状态；钥匙等进度由场景字段保留 */
+  teleportTo(x: number, y: number): void {
+    this.attachedVine = null;
+    this.frozen = false;
+    this.body.enable = true;
+    this.body.setAllowGravity(true);
+    this.body.setGravityY(0);
+    this.view.setScale(this.facing, 1);
+    this.view.setRotation(0);
+    this.view.setPosition(x, y);
+    this.body.reset(x, y);
+    this.coyoteTimer = 0;
+    this.jumpBufferTimer = 0;
+    this.wasOnGround = true;
+    this.prevFallSpeed = 0;
+    this.squashing = false;
+    this.runPhase = 0;
+    this.stepCycle = 0;
+  }
+
+  /** 抓藤状态：读键驱动摆荡/爬升，空格甩出 */
+  private updateVineGrab(delta: number): void {
+    const vine = this.attachedVine;
+    if (!vine) {
+      return;
+    }
+    const dirX =
+      (this.isDown('D') || this.isDown('RIGHT') ? 1 : 0) -
+      (this.isDown('A') || this.isDown('LEFT') ? 1 : 0);
+    const climb =
+      (this.isDown('W') || this.isDown('UP') ? 1 : 0) -
+      (this.isDown('S') || this.isDown('DOWN') ? 1 : 0);
+    vine.update(delta, { dirX, climb });
+
+    // 双手挂在握点，身体垂在下方
+    this.view.setPosition(vine.handX, vine.handY + 26);
+    if (dirX !== 0) {
+      this.facing = dirX > 0 ? 1 : -1;
+      this.displayedFacing = this.facing;
+      this.view.scaleX = this.facing;
+    }
+
+    if (this.justPressed('SPACE')) {
+      this.releaseVine();
+    }
+  }
+
+  private squash(scaleX: number, scaleY: number): void {
+    this.squashing = true;
+    this.scene.tweens.killTweensOf(this.view);
+    this.view.setScale(this.facing * scaleX, scaleY);
+    this.scene.tweens.add({
+      targets: this.view,
+      scaleX: this.facing,
+      scaleY: 1,
+      duration: 150,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        this.squashing = false;
+      },
+    });
+  }
+
+  /** 程序化占位动画：跑步摆腿 / 待机呼吸 / 空中姿势 / 下落伸展 */
+  private animate(delta: number, onGround: boolean): void {
+    const speedRatio =
+      this.opts.speed === 0 ? 0 : Math.min(1, Math.abs(this.body.velocity.x) / this.opts.speed);
+
+    if (onGround && speedRatio > 0.05) {
+      this.runPhase += delta * 0.016 * speedRatio;
+      this.breatheT = 0;
+      const swing = Math.sin(this.runPhase);
+      this.legLeft.rotation = swing * 0.75;
+      this.legRight.rotation = -swing * 0.75;
+      const bob = Math.abs(Math.cos(this.runPhase)) * 2;
+      this.headGroup.y = -19 - bob;
+      this.torso.y = -6 - bob;
+      this.torso.rotation = -0.08;
+
+      // 脚步声与摆腿节拍同步（每半个摆动周期一步）
+      const cycle = Math.floor(this.runPhase / Math.PI);
+      if (cycle !== this.stepCycle) {
+        this.stepCycle = cycle;
+        this.opts.sfx?.step();
+      }
+      return;
+    }
+
+    this.legLeft.rotation = 0;
+    this.legRight.rotation = 0;
+    this.torso.rotation = 0;
+    this.stepCycle = 0;
+
+    if (!onGround) {
+      // 空中姿势：上升收前腿，下落前后打开
+      if (this.body.velocity.y < 0) {
+        this.legLeft.rotation = -0.55;
+        this.legRight.rotation = 0.35;
+      } else {
+        this.legLeft.rotation = -0.15;
+        this.legRight.rotation = 0.55;
+      }
+      this.headGroup.y = -19;
+      this.torso.y = -6;
+      // 随落速的纵向伸展（压扁 tween 进行中不覆盖）
+      if (!this.squashing) {
+        const target = 1 + Math.min(0.1, Math.max(0, this.body.velocity.y - 150) / 5500);
+        this.view.scaleY += (target - this.view.scaleY) * Math.min(1, delta * 0.01);
+      }
+      return;
+    }
+
+    // 待机呼吸
+    this.breatheT += delta;
+    const breath = Math.sin(this.breatheT * 0.0035) * 1.2;
+    this.headGroup.y = -19 - breath;
+    this.torso.y = -6 - breath * 0.6;
   }
 
   private isDown(name: string): boolean {

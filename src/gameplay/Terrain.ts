@@ -51,10 +51,12 @@ export class Terrain {
 
     if (kind === 'ground') {
       this.addGrassLip(def.x, def.y, def.width);
+      this.addTufts(def.x, def.y, def.width, COLORS.grassLight);
     } else {
       // 浮空平台整块用草色，轻且清晰
       body.setFillStyle(COLORS.grass);
       this.addGrassLip(def.x, def.y, def.width, COLORS.grassLight);
+      this.addTufts(def.x, def.y, def.width, 0x69a07e);
     }
   }
 
@@ -79,6 +81,24 @@ export class Terrain {
     band.fillPoints([p1, p2, { x: p2.x, y: p2.y + 12 }, { x: p1.x, y: p1.y + 12 }], true);
     band.lineStyle(3, COLORS.grassLight, 0.9);
     band.strokePoints([p1, p2], false);
+    // 坡面草簇
+    band.fillStyle(COLORS.grassLight, 1);
+    for (let t = 0.1; t < 1; t += 0.17) {
+      const tx = def.x + def.width * t;
+      const ty = def.y + def.drop * t + 6;
+      const h = 5 + ((tx * 7) % 6);
+      band.fillTriangle(tx - 2, ty, tx + 2, ty, tx, ty - h);
+    }
+  }
+
+  /** 草皮上的确定性小草簇，让平台顶不呆板 */
+  private addTufts(x: number, y: number, width: number, color: number): void {
+    const g = this.scene.add.graphics();
+    g.fillStyle(color, 1);
+    for (let tx = x + 14; tx < x + width - 8; tx += 54) {
+      const h = 5 + ((tx * 7) % 6);
+      g.fillTriangle(tx - 2, y + 3, tx + 2, y + 3, tx, y + 3 - h);
+    }
   }
 
   private addGrassLip(x: number, y: number, width: number, color: number = COLORS.grass): void {
