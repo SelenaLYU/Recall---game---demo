@@ -57,6 +57,27 @@ export default class ForestScene extends Phaser.Scene {
     });
   }
 
+  preload(): void {
+    const base = 'assets/character/';
+    this.load.spritesheet('char-yuyu-idle', `${base}char-yuyu-idle-right-96x112-4f.png`, {
+      frameWidth: 96,
+      frameHeight: 112,
+    });
+    this.load.spritesheet('char-yuyu-run', `${base}char-yuyu-run-right-96x112-8f.png`, {
+      frameWidth: 96,
+      frameHeight: 112,
+    });
+    this.load.spritesheet('char-yuyu-jump', `${base}char-yuyu-jump-right-96x112-4f.png`, {
+      frameWidth: 96,
+      frameHeight: 112,
+    });
+    this.load.spritesheet('char-yuyu-fall', `${base}char-yuyu-fall-right-96x112-4f.png`, {
+      frameWidth: 96,
+      frameHeight: 112,
+    });
+    this.load.image('env-forest-bg', 'assets/environment/env-forest-no-slope-1920x1080.jpg');
+  }
+
   create(): void {
     // 场景实例在重玩时会被复用，属性初始化器不会重新执行：
     // 所有玩法状态必须在这里重置（AGENTS.md 第 5 节），否则重玩卡死
@@ -73,8 +94,9 @@ export default class ForestScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#17382b');
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, true, true, false, false);
 
-    // 背景由远及近：天空渐变 → 飘雾 → 远山两层 → 灌木 → 树
+    // 背景由远及近：天空渐变 → 吉卜力森林背景（B 素材）→ 飘雾 → 远山两层 → 灌木 → 树
     this.buildSky();
+    this.buildArtBackdrop();
     this.buildMist();
     this.buildBackground();
     this.buildBushes();
@@ -117,6 +139,16 @@ export default class ForestScene extends Phaser.Scene {
     sky.fillRect(0, 0, 960, 540);
     sky.fillStyle(0x2d5a44, 0.3);
     sky.fillRect(0, 0, 960, 80);
+  }
+
+  /** B 的森林背景图作远景层：慢视差，垫在飘雾/远山之后（1920×1080 按 0.8 缩放） */
+  private buildArtBackdrop(): void {
+    this.add
+      .image(-60, -170, 'env-forest-bg')
+      .setOrigin(0, 0)
+      .setScale(0.8)
+      .setScrollFactor(0.22)
+      .setDepth(-9);
   }
 
   /** 近天飘雾，极慢横向漂移 */

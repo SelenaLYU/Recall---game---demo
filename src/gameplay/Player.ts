@@ -37,15 +37,30 @@ export interface PlayerOptions {
 }
 
 /**
- * 角色控制器：输入、物理、跳跃手感与程序化占位动画。
- *
- * 画面说明：当前角色是部件拼装的小人（头/发/黄衣/背带裤/双腿），
- * 跑步摆腿、待机呼吸、空中姿势全部程序化驱动——B 的序列帧到位后，
- * 把 buildParts 换成 sprite + animation 即可，物理与手感数值不动。
+ * 动画序列帧配置：B 交付的鱼鱼序列帧（Issue #4 规格：96×112 单帧、横向排布、朝右）。
+ * 场景负责在 preload() 里 load.spritesheet，这里负责建动画并按状态切换。
+ */
+const ANIM_DEFS = [
+  { key: 'yuyu-idle', texture: 'char-yuyu-idle', end: 3, frameRate: 6, repeat: -1 },
+  { key: 'yuyu-run', texture: 'char-yuyu-run', end: 7, frameRate: 13, repeat: -1 },
+  { key: 'yuyu-jump', texture: 'char-yuyu-jump', end: 3, frameRate: 14, repeat: 0 },
+  { key: 'yuyu-fall', texture: 'char-yuyu-fall', end: 3, frameRate: 10, repeat: -1 },
+] as const;
+
+/** 序列帧单帧 96×112，缩放后角色视觉高约 67px（碰撞体 28×60，头部略高出盒属正常） */
+const SPRITE_SCALE = 0.6;
+
+/**
+ * 角色控制器：输入、物理与跳跃手感。
+ * 画面为 B 的正式序列帧（Issue #4 到货接入）：idle/run/jump/fall 按状态切换；
+ * 物理/手感数值与动画解耦，调参只动下面的常量。
  */
 export class Player {
   /** 物理与视觉根节点（Container），场景对它建 collider/overlap/follow */
   readonly view: Phaser.GameObjects.Container;
+
+  state: PlayerState = 'idle';
+  facing: -1 | 1 = 1;
 
   // —— 移动模型常量（调手感改这里）——
   /** 地面/空中加速 px/s² */
@@ -59,9 +74,8 @@ export class Player {
   /** 下落加重（叠加在世界重力上，共 1.6×），跳跃弧线更漂亮 */
   private static readonly FALL_GRAVITY_EXTRA = 840;
   private static readonly SKID_DUST_MS = 320;
-
-  state: PlayerState = 'idle';
-  facing: -1 | 1 = 1;
+  /** 跑步脚步声间隔（与 run 动画步频对齐） */
+  private static readonly STEP_INTERVAL_MS = 280;
 
   private readonly scene: Phaser.Scene;
   private readonly opts: Required<Omit<PlayerOptions, 'sfx'>> & {
@@ -69,12 +83,8 @@ export class Player {
   };
   private readonly keys: Record<string, Phaser.Input.Keyboard.Key>;
   private readonly body: Phaser.Physics.Arcade.Body;
-
-  // 程序化动画部件
-  private readonly headGroup: Phaser.GameObjects.Container;
-  private readonly torso: Phaser.GameObjects.Rectangle;
-  private readonly legLeft: Phaser.GameObjects.Rectangle;
-  private readonly legRight: Phaser.GameObjects.Rectangle;
+  private readonly sprite: Phaser.GameObjects.Sprite;
+  private readonly shadow: Phaser.GameObjects.Ellipse;
 
   private coyoteTimer = 0;
   private jumpBufferTimer = 0;
@@ -82,11 +92,10 @@ export class Player {
   private prevFallSpeed = 0;
   private frozen = false;
   private squashing = false;
-  private runPhase = 0;
-  private breatheT = 0;
-  private stepCycle = 0;
+  private stepTimer = 0;
   private skidDustAt = 0;
   private displayedFacing: -1 | 1 = 1;
+  private currentAnim = '';
   /** 空中可用的二段跳次数（落地恢复） */
   private airJumpsLeft = 0;
   private attachedVine: Vine | null = null;
@@ -106,44 +115,20 @@ export class Player {
       ...options,
     };
 
-    // ---- 部件化占位小人（参考“鱼鱼-小黄衣”设定稿的配色） ----
-    const { width, height } = this.opts;
-    const headGroup = scene.add.container(0, -19);
-    const backHair = scene.add.rectangle(-6, 2, 6, 13, 0x4a3628);
-    const head = scene.add.circle(0, 0, 8, 0xf2d8b8).setStrokeStyle(1.5, 0xb99a72, 0.8);
-    const hairCap = scene.add.rectangle(0, -5, 16.5, 8, 0x4a3628);
-    const eye = scene.add.rectangle(5, 0.5, 2.5, 3.2, 0x2b2b2b);
-    headGroup.add([backHair, head, hairCap, eye]);
+    this.createAnims();
 
-    const torso = scene.add
-      .rectangle(0, -6, 15, 20, 0xf0d98c)
-      .setStrokeStyle(1.5, 0xb99a45, 0.8);
-    const bib = scene.add.rectangle(0, -1, 15, 11, 0x5a7d9a);
-    const legLeft = scene.add
-      .rectangle(-3.5, 8, 5, 19, 0x46617a)
-      .setOrigin(0.5, 0)
-      .setStrokeStyle(1, 0x2f4254, 0.7);
-    const legRight = scene.add
-      .rectangle(3.5, 8, 5, 19, 0x46617a)
-      .setOrigin(0.5, 0)
-      .setStrokeStyle(1, 0x2f4254, 0.7);
+    // 脚下软阴影：给角色“落地感”（落地实、空中淡）
+    this.shadow = scene.add.ellipse(0, 29, 24, 7, 0x0b170f, 0.28);
+    // 序列帧角色：origin 底部中心，脚底对齐碰撞盒下缘（+height/2）
+    this.sprite = scene.add.sprite(0, this.opts.height / 2, 'char-yuyu-idle', 0);
+    this.sprite.setOrigin(0.5, 1).setScale(SPRITE_SCALE);
 
-    this.view = scene.add.container(options.x, options.y, [
-      legLeft,
-      legRight,
-      torso,
-      bib,
-      headGroup,
-    ]);
-    this.headGroup = headGroup;
-    this.torso = torso;
-    this.legLeft = legLeft;
-    this.legRight = legRight;
+    this.view = scene.add.container(options.x, options.y, [this.shadow, this.sprite]);
 
     scene.physics.add.existing(this.view);
     this.body = this.view.body as Phaser.Physics.Arcade.Body;
-    this.body.setSize(width, height, false);
-    this.body.setOffset(-width / 2, -height / 2);
+    this.body.setSize(this.opts.width, this.opts.height, false);
+    this.body.setOffset(-this.opts.width / 2, -this.opts.height / 2);
     this.body.setCollideWorldBounds(true);
 
     this.keys = scene.input.keyboard
@@ -151,6 +136,21 @@ export class Player {
           'A,D,W,S,LEFT,RIGHT,UP,DOWN,SPACE',
         ) as Record<string, Phaser.Input.Keyboard.Key>)
       : {};
+  }
+
+  /** 全局动画只建一次；重复进场景不重建 */
+  private createAnims(): void {
+    if (this.scene.anims.exists('yuyu-idle')) {
+      return;
+    }
+    for (const def of ANIM_DEFS) {
+      this.scene.anims.create({
+        key: def.key,
+        frames: this.scene.anims.generateFrameNumbers(def.texture, { start: 0, end: def.end }),
+        frameRate: def.frameRate,
+        repeat: def.repeat,
+      });
+    }
   }
 
   update(delta: number): void {
@@ -305,12 +305,10 @@ export class Player {
     this.body.setVelocity(0, 0);
     this.body.enable = false;
     this.opts.sfx?.grab();
-    // 悬挂姿势：双腿微收
-    this.legLeft.rotation = -0.35;
-    this.legRight.rotation = -0.18;
-    this.torso.rotation = 0;
-    this.headGroup.y = -19;
-    this.torso.y = -6;
+    // 悬挂姿势：定格跳跃帧，阴影淡出
+    this.playAnim('yuyu-jump', true);
+    this.sprite.anims.pause();
+    this.shadow.setAlpha(0.1);
     this.view.setRotation(0);
   }
 
@@ -326,30 +324,11 @@ export class Player {
     this.body.enable = true;
     this.body.setAllowGravity(true);
     this.body.setVelocity(velocity.vx, velocity.vy);
+    this.sprite.anims.resume();
     this.wasOnGround = false;
     this.prevFallSpeed = 0;
     this.coyoteTimer = 0;
     Effects.dust(this.scene, vine.handX, vine.handY + 10, 4, 14);
-  }
-
-  /** 死亡重生：传送回重生点并清状态；钥匙等进度由场景字段保留 */
-  teleportTo(x: number, y: number): void {
-    this.attachedVine = null;
-    this.frozen = false;
-    this.body.enable = true;
-    this.body.setAllowGravity(true);
-    this.body.setGravityY(0);
-    this.view.setScale(this.facing, 1);
-    this.view.setRotation(0);
-    this.view.setPosition(x, y);
-    this.body.reset(x, y);
-    this.coyoteTimer = 0;
-    this.jumpBufferTimer = 0;
-    this.wasOnGround = true;
-    this.prevFallSpeed = 0;
-    this.squashing = false;
-    this.runPhase = 0;
-    this.stepCycle = 0;
   }
 
   /** 抓藤状态：读键驱动摆荡/爬升，空格甩出 */
@@ -379,6 +358,27 @@ export class Player {
     }
   }
 
+  /** 死亡重生：传送回重生点并清状态；钥匙等进度由场景字段保留 */
+  teleportTo(x: number, y: number): void {
+    this.attachedVine = null;
+    this.frozen = false;
+    this.body.enable = true;
+    this.body.setAllowGravity(true);
+    this.body.setGravityY(0);
+    this.view.setScale(this.facing, 1);
+    this.view.setRotation(0);
+    this.view.setPosition(x, y);
+    this.body.reset(x, y);
+    this.sprite.anims.resume();
+    this.currentAnim = '';
+    this.coyoteTimer = 0;
+    this.jumpBufferTimer = 0;
+    this.wasOnGround = true;
+    this.prevFallSpeed = 0;
+    this.squashing = false;
+    this.stepTimer = 0;
+  }
+
   private squash(scaleX: number, scaleY: number): void {
     this.squashing = true;
     this.scene.tweens.killTweensOf(this.view);
@@ -395,60 +395,45 @@ export class Player {
     });
   }
 
-  /** 程序化占位动画：跑步摆腿 / 待机呼吸 / 空中姿势 / 下落伸展 */
+  /** 状态 → 动画切换（只在变化时 play）；跑步脚步声与动画步频对齐 */
   private animate(delta: number, onGround: boolean): void {
+    this.shadow.setAlpha(onGround ? 0.28 : 0.12);
     const speedRatio =
       this.opts.speed === 0 ? 0 : Math.min(1, Math.abs(this.body.velocity.x) / this.opts.speed);
 
-    if (onGround && speedRatio > 0.05) {
-      this.runPhase += delta * 0.016 * speedRatio;
-      this.breatheT = 0;
-      const swing = Math.sin(this.runPhase);
-      this.legLeft.rotation = swing * 0.75;
-      this.legRight.rotation = -swing * 0.75;
-      const bob = Math.abs(Math.cos(this.runPhase)) * 2;
-      this.headGroup.y = -19 - bob;
-      this.torso.y = -6 - bob;
-      this.torso.rotation = -0.08;
+    const target = !onGround
+      ? this.body.velocity.y < 0
+        ? 'yuyu-jump'
+        : 'yuyu-fall'
+      : speedRatio > 0.05
+        ? 'yuyu-run'
+        : 'yuyu-idle';
+    this.playAnim(target);
 
-      // 脚步声与摆腿节拍同步（每半个摆动周期一步）
-      const cycle = Math.floor(this.runPhase / Math.PI);
-      if (cycle !== this.stepCycle) {
-        this.stepCycle = cycle;
+    if (onGround && speedRatio > 0.05) {
+      this.stepTimer -= delta;
+      if (this.stepTimer <= 0) {
+        this.stepTimer = Player.STEP_INTERVAL_MS;
         this.opts.sfx?.step();
       }
-      return;
+    } else {
+      this.stepTimer = 0;
     }
 
-    this.legLeft.rotation = 0;
-    this.legRight.rotation = 0;
-    this.torso.rotation = 0;
-    this.stepCycle = 0;
+    // 下落纵向伸展（压扁 tween 进行中不覆盖）
+    if (!onGround && !this.squashing) {
+      const targetY = 1 + Math.min(0.1, Math.max(0, this.body.velocity.y - 150) / 5500);
+      this.view.scaleY += (targetY - this.view.scaleY) * Math.min(1, delta * 0.01);
+    }
+  }
 
-    if (!onGround) {
-      // 空中姿势：上升收前腿，下落前后打开
-      if (this.body.velocity.y < 0) {
-        this.legLeft.rotation = -0.55;
-        this.legRight.rotation = 0.35;
-      } else {
-        this.legLeft.rotation = -0.15;
-        this.legRight.rotation = 0.55;
-      }
-      this.headGroup.y = -19;
-      this.torso.y = -6;
-      // 随落速的纵向伸展（压扁 tween 进行中不覆盖）
-      if (!this.squashing) {
-        const target = 1 + Math.min(0.1, Math.max(0, this.body.velocity.y - 150) / 5500);
-        this.view.scaleY += (target - this.view.scaleY) * Math.min(1, delta * 0.01);
-      }
+  private playAnim(key: string, force = false): void {
+    if (key === this.currentAnim && !force) {
       return;
     }
-
-    // 待机呼吸
-    this.breatheT += delta;
-    const breath = Math.sin(this.breatheT * 0.0035) * 1.2;
-    this.headGroup.y = -19 - breath;
-    this.torso.y = -6 - breath * 0.6;
+    this.currentAnim = key;
+    this.sprite.anims.resume();
+    this.sprite.play(key, true);
   }
 
   private isDown(name: string): boolean {
