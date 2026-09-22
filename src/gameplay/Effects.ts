@@ -9,36 +9,11 @@ function makeRandom(seed: number): () => number {
   };
 }
 
-type Bloomable = {
-  postFX?: {
-    addBloom: (
-      color?: number,
-      offsetX?: number,
-      offsetY?: number,
-      blurStrength?: number,
-      strength?: number,
-      steps?: number,
-    ) => unknown;
-  };
-};
-
 /**
  * 通用视觉特效：尘土、金色迸溅、光环、萤火虫。
  * 全部用游戏对象 + tween 合成，不需要任何贴图素材。
  */
 export const Effects = {
-  /** 金色发光物的对象级 Bloom（仅 WebGL；Canvas 降级无操作，见 AGENTS.md 第 6 节） */
-  glow(
-    scene: Phaser.Scene,
-    target: Phaser.GameObjects.Container | Phaser.GameObjects.Shape,
-    color = 0xf2d98c,
-  ): void {
-    if (scene.game.renderer.type !== Phaser.WEBGL) {
-      return;
-    }
-    (target as unknown as Bloomable).postFX?.addBloom(color, 1, 1, 8, 1, 3);
-  },
-
   /** 落地/起跳的尘土 */
   dust(scene: Phaser.Scene, x: number, y: number, count = 6, spread = 24): void {
     const rand = makeRandom(Math.floor(x * 31 + y * 7) + count);
@@ -99,16 +74,11 @@ export const Effects = {
     for (let i = 0; i < count; i++) {
       const x = rand() * worldWidth;
       const y = 180 + rand() * 340;
-      const halo = scene.add
-        .circle(x, y, 7, 0xe6cf97, 0.1)
-        .setBlendMode(Phaser.BlendModes.ADD)
-        .setDepth(4);
       const dot = scene.add
         .circle(x, y, 2.2, 0xe6cf97, 0.2 + rand() * 0.3)
         .setDepth(4);
-      const blink = [halo, dot];
       scene.tweens.add({
-        targets: blink,
+        targets: dot,
         x: x + (rand() - 0.5) * 120,
         y: y + (rand() - 0.5) * 80,
         duration: 3000 + rand() * 4000,
@@ -117,7 +87,7 @@ export const Effects = {
         ease: 'Sine.easeInOut',
       });
       scene.tweens.add({
-        targets: blink,
+        targets: dot,
         alpha: 0.06,
         duration: 1200 + rand() * 1600,
         yoyo: true,
