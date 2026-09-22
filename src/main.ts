@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import ForestScene from './scenes/ForestScene';
 import RoomScene from './scenes/RoomScene';
 import EndingScene from './scenes/EndingScene';
+import { preloadMenuRoomMusic, playMenuRoomMusic } from './MenuRoomMusic';
 import { BASE_WIDTH, BASE_HEIGHT, HD_SCALE, applyHDCamera } from './systems/Resolution';
 // 第一个场景：开始画面
 class MenuScene extends Phaser.Scene {
@@ -9,7 +10,19 @@ class MenuScene extends Phaser.Scene {
     super('menu');
   }
 
+  preload() {
+    preloadMenuRoomMusic(this);
+  }
+
   create() {
+    playMenuRoomMusic(this);
+
+    // 由整合入口接入房间音乐，C 无需修改解谜代码。
+    // 返回菜单时先移除同一回调，避免重复注册。
+    const room = this.scene.get('room');
+    room.events.off(Phaser.Scenes.Events.CREATE, playMenuRoomMusic);
+    room.events.on(Phaser.Scenes.Events.CREATE, playMenuRoomMusic);
+
     applyHDCamera(this);
     this.cameras.main.setBackgroundColor('#15251f');
 
@@ -22,6 +35,28 @@ class MenuScene extends Phaser.Scene {
       fontSize: '22px',
       color: '#d3ddd5',
     }).setOrigin(0.5);
+    this.add.text(480, 440, [
+      '移动：A / D 或 ← / →　跳跃：空格，空中可再跳一次',
+      '空中靠近藤蔓自动抓住：A / D 摆荡，W / S 攀爬，空格松手',
+      '开始与爷爷的记忆之旅吧',
+    ], {
+      fontSize: '16px',
+      color: '#b8c2cc',
+      align: 'center',
+      lineSpacing: 8,
+    }).setOrigin(0.5, 0);
+
+    if (this.sound.locked) {
+      const musicHint = this.add.text(480, 520, '点击页面空白处开启音乐', {
+        fontSize: '14px',
+        color: '#b8c2cc',
+      }).setOrigin(0.5);
+      const hideMusicHint = () => musicHint.destroy();
+      this.sound.once(Phaser.Sound.Events.UNLOCKED, hideMusicHint);
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        this.sound.off(Phaser.Sound.Events.UNLOCKED, hideMusicHint);
+      });
+    }
 
     const button = this.add.text(480, 360, '开始游戏', {
       fontSize: '28px',
