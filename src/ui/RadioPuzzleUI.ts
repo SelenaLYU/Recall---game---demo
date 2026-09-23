@@ -19,10 +19,11 @@ const MESSAGES = [
   '轻轻转动旋钮。',
   '……沙沙的杂音。',
   '……呼呼的风声。',
-  '……公公的留言。',
+  '爷爷没有离开你，只是现在在一个叫回南城的地方。',
   '……熟悉的歌声响起。',
 ];
-const CHANNEL_LABELS = ['', '杂音', '风声', '公公的声音', '歌声'];
+
+const CHANNEL_LABELS = ['', '杂音', '风声', '爷爷的声音', '歌声'];
 
 function installStyle(): void {
   if (document.getElementById(STYLE_ID)) return;
@@ -106,7 +107,7 @@ function installStyle(): void {
 export function showRadioPuzzleUI(scene: Phaser.Scene, options: RadioPuzzleOptions): RadioPuzzleHandle {
   installStyle();
   const root = document.createElement('div');
-  root.className = 'recall-radio';
+  root.className = 'recall-radio recall-ui-font';
   root.tabIndex = 0;
   root.setAttribute('role', 'dialog');
   root.setAttribute('aria-modal', 'true');

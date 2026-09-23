@@ -107,9 +107,9 @@ export default class IntroScene extends Phaser.Scene {
 
     const skip = document.createElement('button');
     skip.type = 'button';
-    skip.textContent = '跳过动画 ›';
+    skip.textContent = '跳过动画';
     skip.setAttribute('aria-label', '跳过开场动画');
-    skip.style.cssText = 'position:fixed;z-index:2147481500;color:#fff;background:#26302f;border:0;border-radius:4px;padding:10px 16px;font:18px Arial,"Microsoft YaHei",sans-serif;white-space:nowrap;cursor:pointer;';
+    skip.style.cssText = 'position:fixed;z-index:2147481500;color:rgba(247,237,207,.72);background:rgba(14,32,24,.26);border:1px solid rgba(247,237,207,.30);border-radius:3px;padding:7px 12px;font:11px Arial,"Microsoft YaHei",sans-serif;letter-spacing:.14em;box-shadow:0 2px 8px rgba(10,25,18,.25);backdrop-filter:blur(4px);opacity:.78;white-space:nowrap;cursor:pointer;';
     skip.addEventListener('click', enterForest);
     document.body.append(skip);
 
