@@ -98,6 +98,29 @@ export class Sfx {
     this.tone({ from: 880, duration: 0.22, volume: 0.24, delay: 0.12 });
   }
 
+  /** 收音机频道占位音（方的四段音频到货后由 playSample 替换，见 AGENTS.md） */
+  radioStatic(): void {
+    this.noise(0.5, 0.14, 2600);
+    this.noise(0.3, 0.08, 1800, 0.55);
+  }
+
+  radioWind(): void {
+    this.noise(0.9, 0.12, 420);
+    this.tone({ type: 'triangle', from: 240, to: 320, duration: 0.8, volume: 0.05 });
+  }
+
+  radioLullaby(): void {
+    const notes = [523.25, 587.33, 659.25, 587.33, 523.25, 659.25, 523.25];
+    notes.forEach((f, i) => {
+      this.tone({ from: f, duration: 0.2, volume: 0.16, delay: i * 0.24, type: 'sine' });
+    });
+  }
+
+  radioVoice(): void {
+    this.tone({ type: 'triangle', from: 196, duration: 0.4, volume: 0.1 });
+    this.tone({ type: 'triangle', from: 220, duration: 0.5, volume: 0.1, delay: 0.5 });
+  }
+
   collect(): void {
     this.tone({ from: 740, to: 988, duration: 0.2, volume: 0.26 });
     this.tone({ from: 1318, duration: 0.16, volume: 0.2, delay: 0.12 });
