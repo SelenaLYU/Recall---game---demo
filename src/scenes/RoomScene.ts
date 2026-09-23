@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { Sfx } from '../systems/Sfx';
 import { Effects } from '../gameplay/Effects';
-import { applyHDCamera, HD_SCALE } from '../systems/Resolution';
+import { applyHDCamera, bufferScaleOf } from '../systems/Resolution';
 import { showClockPuzzleUI } from '../ui/ClockPuzzleUI';
 import { createFragmentHud, type FragmentHudHandle } from '../ui/FragmentHud';
 import {
@@ -117,6 +117,8 @@ export default class RoomScene extends Phaser.Scene {
   private hintFade?: Phaser.Tweens.Tween;
   /** 石槽水面中心（playFishSwim 用） */
   private basinWater: { x: number; y: number } | null = null;
+  /** hudLayer 随渲染缓冲重缩放的处理器（场景关闭时解绑） */
+  private hudSyncHandler?: () => void;
   /** 记忆球/收音机打开时的动态灯（场景 shutdown 会清空 LightsManager，重启重建） */
   private orbLight?: Phaser.GameObjects.Light;
   private radioLight?: Phaser.GameObjects.Light;
@@ -646,7 +648,17 @@ export default class RoomScene extends Phaser.Scene {
       .container(0, 0)
       .setScrollFactor(0)
       .setDepth(210)
-      .setScale(HD_SCALE);
+      .setScale(bufferScaleOf(this));
+    // HUD 是 scrollFactor 0 层（世界单位 = 缓冲像素），渲染缓冲随窗口变化时跟着缩放
+    this.scale.off(Phaser.Scale.Events.RESIZE, this.hudSyncHandler);
+    this.hudSyncHandler = () => this.hudLayer.setScale(bufferScaleOf(this));
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.hudSyncHandler);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      if (this.hudSyncHandler) {
+        this.scale.off(Phaser.Scale.Events.RESIZE, this.hudSyncHandler);
+      }
+      this.hudSyncHandler = undefined;
+    });
     this.hintText = this.add.text(16, 14, '', {
       fontFamily: 'sans-serif',
       fontSize: '15px',

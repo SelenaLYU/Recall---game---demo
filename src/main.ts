@@ -5,7 +5,7 @@ import ForestScene from './scenes/ForestScene';
 import RoomScene from './scenes/RoomScene';
 import EndingScene from './scenes/EndingScene';
 import { preloadMenuRoomMusic, playMenuRoomMusic } from './MenuRoomMusic';
-import { BASE_WIDTH, BASE_HEIGHT, HD_SCALE, applyHDCamera } from './systems/Resolution';
+import { BASE_WIDTH, BASE_HEIGHT, HD_SCALE, applyHDCamera, computeBufferScale } from './systems/Resolution';
 import menuBackgroundUrl from '../assets/environment/森林花海_原场景清晰化_无坡_1920x1080_v2.png?url';
 
 /** FIT 信箱区颜色 = 各场景自己的背景色（index.html body 有 0.45s 过渡） */
@@ -79,7 +79,9 @@ class MenuScene extends Phaser.Scene {
     if (this.sound.locked) {
       const musicHint = this.add.text(480, 520, '点击页面空白处开启音乐', {
         fontSize: '14px',
-        color: '#b8c2cc',
+        color: '#f4f9f2',
+        backgroundColor: 'rgba(11, 23, 18, 0.72)',
+        padding: { x: 10, y: 5 },
       }).setOrigin(0.5);
       const hideMusicHint = () => musicHint.destroy();
       this.sound.once(Phaser.Sound.Events.UNLOCKED, hideMusicHint);
@@ -121,11 +123,12 @@ class MenuScene extends Phaser.Scene {
 
 // 把游戏放进 index.html 中的 game 区域（容器尺寸由 CSS 铺满视口，勿用 JS 设高度）
 
-new Phaser.Game({
+const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
-  // 渲染缓冲按设备像素比放大（上限 2x）：逻辑坐标仍是 960×540（相机 zoom 反向缩放），
-  // 高分屏上不再被浏览器拉伸发糊。scale.zoom 在 FIT 模式下不生效，勿改回（实测）。
+  // 初始渲染缓冲按设备像素比放大（上限 2x）；boot 后立即按画布实际 CSS 尺寸校准，
+  // 之后随窗口变化动态调整（见下方 syncRenderBuffer）——缓冲与屏幕设备像素 1:1，
+  // 浏览器不再放大画布，这是清晰度的根治点。scale.zoom 在 FIT 模式下不生效，勿改回。
   width: Math.round(BASE_WIDTH * HD_SCALE),
   height: Math.round(BASE_HEIGHT * HD_SCALE),
   scale: {
@@ -135,4 +138,21 @@ new Phaser.Game({
   },
   render: { antialias: true, powerPreference: 'high-performance' },
   scene: [MenuScene, IntroScene, ForestScene, RoomScene, EndingScene],
+});
+
+/** 渲染缓冲 = 画布 CSS 宽 × 设备像素比（960..3840，16:9 恒定，FIT 等比不变） */
+const syncRenderBuffer = () => {
+  const cssWidth = game.scale.canvasBounds.width || game.scale.parentSize.width;
+  const width = Math.round(BASE_WIDTH * computeBufferScale(cssWidth));
+  const height = Math.round((width * BASE_HEIGHT) / BASE_WIDTH);
+  if (game.scale.gameSize.width !== width) {
+    game.scale.setGameSize(width, height);
+  }
+};
+game.events.once(Phaser.Core.Events.READY, syncRenderBuffer);
+// 窗口缩放防抖校准；setGameSize 引发的二次 RESIZE 会算出相同尺寸而空转，无振荡
+let syncBufferTimer: number | undefined;
+game.scale.on(Phaser.Scale.Events.RESIZE, () => {
+  window.clearTimeout(syncBufferTimer);
+  syncBufferTimer = window.setTimeout(syncRenderBuffer, 150);
 });
