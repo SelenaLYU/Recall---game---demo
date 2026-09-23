@@ -25,21 +25,25 @@ const COLORS = {
   soilSpeckle: 0x1d3026,
   soilSpeckleLight: 0x41614f,
   grass: 0x4a7a5c,
-  /** 可站立表面的统一识别亮边（玩家据此辨认落脚处） */
+  /** 可站立表面的统一识别亮边（玩家据此辨认落脚处）——程序占位绘制用 */
   grassEdge: 0x8fd1a8,
+  /** B 贴图模式下的顶面高光：暖白微光替代亮绿描边（实机看亮绿线像荧光边界线，与水彩风割裂） */
+  topGlow: 0xfff3d9,
   grassBlade: 0x69a07e,
   root: 0x1c3026,
 } as const;
-
-const GRASS_LIP = 12;
-/** 台阶最大上升高度，越小越顺滑 */
-const MAX_STEP_RISE = 14;
 
 /** B 交付的可平铺贴图（存在则优先使用，否则程序绘制） */
 const TEXTURE = {
   ground: 'env-jasmine-ground',
   float: 'env-jasmine-platform',
+  /** 板端小花：贴在浮台两端，软化笔直的贴图断口 */
+  bloom: 'env-small-jasmine-bloom',
 } as const;
+
+const GRASS_LIP = 12;
+/** 台阶最大上升高度，越小越顺滑 */
+const MAX_STEP_RISE = 14;
 
 /**
  * 地形构建：碰撞与画面分离——Arcade 静态碰撞体隐藏不渲染，
@@ -126,10 +130,11 @@ export class Terrain {
         .setOrigin(0, 0);
       hedge.setTileScale(0.236 + jitter, 0.236 + jitter);
       hedge.setTint(x % 240 < 120 ? 0xf6f9f2 : 0xe9efe4);
-      // 可站立识别线（可读性约定）：贴图模式下也画，落在碰撞顶面上，脚底与"表面"有稳定接触读法
+      // 顶面高光：一条极淡的暖白微光落在碰撞顶面（可读性约定的"表面读法"）。
+      // 不再用亮绿描边——实机看像荧光边界线，贴在 B 的水彩花丛上非常突兀
       const edge = this.scene.add.graphics();
-      edge.lineStyle(2, COLORS.grassEdge, 0.35);
-      edge.lineBetween(x + 2, y + 1, x + width - 2, y + 1);
+      edge.lineStyle(3, COLORS.topGlow, 0.14);
+      edge.lineBetween(x + 4, y + 2, x + width - 4, y + 2);
       return;
     }
     const g = this.scene.add.graphics();
@@ -154,9 +159,33 @@ export class Terrain {
         .setOrigin(0, 0);
       board.setTileScale(0.36 + jitter, 0.36 + jitter);
       board.setTint(Math.round(x) % 260 < 130 ? 0xf4f8f1 : 0xe8efe6);
+      // 两端贴一朵垂出来的小花（B 的 bloom 素材）：软化笔直的贴图断口，
+      // 让花板像"长出来的一丛"而不是被切齐的矩形块
+      if (this.scene.textures.exists(TEXTURE.bloom)) {
+        for (const [bx, seed] of [
+          [x - 2, Math.round(x) * 3],
+          [x + width + 2, Math.round(x) * 3 + 1],
+        ] as const) {
+          const sway = ((seed * 17) % 7) - 3;
+          const bloom = this.scene.add
+            .image(bx, y + 6, TEXTURE.bloom)
+            .setOrigin(0.5, 0.5)
+            .setScale(0.3 + (((seed * 13) % 5) / 100))
+            .setAngle(sway)
+            .setTint(Math.round(x) % 260 < 130 ? 0xf4f8f1 : 0xe8efe6);
+          this.scene.tweens.add({
+            targets: bloom,
+            angle: sway + 4,
+            duration: 1900 + ((seed * 29) % 700),
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+          });
+        }
+      }
       const edge = this.scene.add.graphics();
-      edge.lineStyle(2, COLORS.grassEdge, 0.5);
-      edge.lineBetween(x - 4, y + 1, x + width + 4, y + 1);
+      edge.lineStyle(3, COLORS.topGlow, 0.16);
+      edge.lineBetween(x - 2, y + 2, x + width + 2, y + 2);
       return;
     }
     const g = this.scene.add.graphics();

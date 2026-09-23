@@ -28,8 +28,6 @@ import forestBgmUrl from '../../assets/audio/forest-bgm.mp3?url';
 const WORLD_WIDTH = 2880;
 const WORLD_HEIGHT = 640;
 const GROUND_TOP = 560;
-/** 开场出生高台的顶面（花坡起点） */
-const PLATEAU_TOP = 386;
 /** 掉出地图判定线（世界下界之外） */
 const KILL_Y = 800;
 /** 弹跳花的弹起速度 */
@@ -106,6 +104,22 @@ export default class ForestScene extends Phaser.Scene {
     this.load.audio('sfx-footstep', footstepUrl);
     this.load.audio('sfx-jump', jumpSfxUrl);
     this.load.audio('forest-bgm', forestBgmUrl);
+    this.load.image('env-jasmine-ground', 'assets/environment/env-jasmine-ground-platform-1640x220.png');
+    this.load.image('env-jasmine-platform', 'assets/environment/env-jasmine-platform-512x144.png');
+    this.load.image('env-jasmine-vine', 'assets/environment/env-jasmine-vine-128x512.png');
+    this.load.image('env-small-jasmine-bloom', 'assets/environment/env-small-jasmine-bloom-128x128.png');
+    this.load.image('env-jasmine-branch', 'assets/environment/env-jasmine-support-branch-1280x384.png');
+    this.load.image('env-jasmine-door', 'assets/environment/env-manchurian-jasmine-door-256x384.png');
+    this.load.image('item-golden-key', 'assets/environment/item-golden-jasmine-key-192x256.png');
+    this.load.image('env-giant-jasmine-plant', 'assets/environment/env-giant-jasmine-plant-256x384.png');
+    this.load.image('env-tree-watercolor', 'assets/environment/env-tree-watercolor-256x320.png');
+    this.load.spritesheet('char-yuyu-grab', 'assets/environment/yuyu-grab-small-jasmine-right-128x160-6f.png', {
+      frameWidth: 128,
+      frameHeight: 160,
+    });
+    this.load.audio('sfx-footstep', 'assets/audio/sfx-footstep.m4a');
+    this.load.audio('sfx-jump', 'assets/audio/sfx-jump.wav');
+    this.load.audio('forest-bgm', 'assets/audio/forest-bgm.mp3');
   }
 
   /** 森林专属配乐：首次用户操作后解锁，离开森林时停止并清理。 */
@@ -358,6 +372,8 @@ export default class ForestScene extends Phaser.Scene {
    */
   private buildTerrain(): void {
     this.terrain = new Terrain(this);
+    // 开场保持平地起手（2026-09-23 按需求撤除开场花坡：13px 台阶对 Arcade 是墙，
+    // 走回去会被卡住；坡道台阶能力与素材保留，见 AGENTS §5）
     this.terrain.addPlatform({ x: 0, y: GROUND_TOP, width: 820, height: 80 });
     // 开场花坡：出生高台（顶 386）→ 沿花坡素材崖沿曲线下行到主地面。
     // 台阶按素材实测崖沿采样（每段 ≤13px），视觉用崖沿贴图而非直线草带
@@ -411,7 +427,7 @@ export default class ForestScene extends Phaser.Scene {
 
   private buildPlayer(): void {
     this.sfx = new Sfx(this);
-    this.player = new Player(this, { x: 75, y: PLATEAU_TOP - 30, sfx: this.sfx });
+    this.player = new Player(this, { x: 120, y: 500, sfx: this.sfx });
     this.physics.add.collider(this.player.view, this.terrain.solids);
   }
 
