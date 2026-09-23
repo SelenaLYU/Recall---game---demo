@@ -83,6 +83,10 @@ export default class ForestScene extends Phaser.Scene {
     this.load.image('env-jasmine-branch', 'assets/environment/env-jasmine-support-branch-1280x384.png');
     this.load.image('env-jasmine-door', 'assets/environment/env-manchurian-jasmine-door-256x384.png');
     this.load.image('item-golden-key', 'assets/environment/item-golden-jasmine-key-192x256.png');
+    this.load.image('env-giant-jasmine-plant', 'assets/environment/env-giant-jasmine-plant-256x384.png');
+    this.load.image('env-tree-watercolor', 'assets/environment/env-tree-watercolor-256x320.png');
+    this.load.audio('sfx-footstep', 'assets/audio/sfx-footstep.m4a');
+    this.load.audio('sfx-jump', 'assets/audio/sfx-jump.wav');
     this.load.audio('forest-bgm', 'assets/audio/forest-bgm.mp3');
   }
 
@@ -195,7 +199,21 @@ export default class ForestScene extends Phaser.Scene {
   }
 
   /** 世界层装饰树（无碰撞，位于角色身后） */
+  /** 世界层装饰树：B 的水彩树贴图（无碰撞，角色身后；无贴图时退回程序绘制） */
   private buildTrees(): void {
+    if (this.textures.exists('env-tree-watercolor')) {
+      const spots = [420, 740, 2440, 2760];
+      spots.forEach((x, i) => {
+        const scale = 0.5 + ((i * 37) % 20) / 100;
+        this.add
+          .image(x, GROUND_TOP + 8, 'env-tree-watercolor')
+          .setOrigin(0.5, 1)
+          .setScale(scale)
+          .setDepth(-4)
+          .setAlpha(0.96);
+      });
+      return;
+    }
     const g = this.add.graphics().setDepth(-4);
     const spots = [420, 740, 2440, 2760];
     spots.forEach((x, i) => {
