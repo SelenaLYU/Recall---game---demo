@@ -354,17 +354,16 @@ export default class RoomScene extends Phaser.Scene {
     const layer = this.add.container(0, 0).setDepth(200);
     this.panel = layer;
 
-    const dim = this.add.rectangle(480, 270, ROOM_WIDTH, ROOM_HEIGHT, 0x060e0a, 0.78).setInteractive();
-    layer.add(dim);
-    layer.add(this.panelTitle(480, 66, '把照片拼回原样'));
-    this.addCloseButton(layer, 916, 40);
+    this.panelBackdrop(layer);
+    layer.add(this.panelTitle(480, 62, '把照片拼回原样'));
+    this.addCloseButton(layer, 922, 34);
 
     const srcW = 96;
     const srcH = 64;
     const cellW = 144;
     const cellH = 96;
     const boardX = 480 - (cellW * 4) / 2;
-    const boardY = 96;
+    const boardY = 92;
 
     // cells[pos] = 该格子的图块编号（15 = 空格）；从完成态做随机空移保证可解
     const cells = Array.from({ length: 16 }, (_, i) => i);
@@ -384,12 +383,44 @@ export default class RoomScene extends Phaser.Scene {
       cells[pick] = 15;
     }
 
+    // 相框底板：暖纸底 + 木色描边 + 4×4 格线——照片的完整轮廓和格子一眼可读，
+    // 图块不再是"散在昏暗房间上的碎片"
+    const pad = 12;
+    const plate = this.add.graphics();
+    plate.fillStyle(0xf0e8d4, 1);
+    plate.fillRoundedRect(
+      boardX - pad, boardY - pad, cellW * 4 + pad * 2, cellH * 4 + pad * 2, 10,
+    );
+    plate.lineStyle(3, 0x8a6d3b, 1);
+    plate.strokeRoundedRect(
+      boardX - pad, boardY - pad, cellW * 4 + pad * 2, cellH * 4 + pad * 2, 10,
+    );
+    plate.lineStyle(1, 0x5a4a33, 0.35);
+    for (let i = 1; i < 4; i++) {
+      plate.lineBetween(boardX + i * cellW, boardY, boardX + i * cellW, boardY + cellH * 4);
+      plate.lineBetween(boardX, boardY + i * cellH, boardX + cellW * 4, boardY + i * cellH);
+    }
+    layer.add(plate);
+
     const tileImages = new Map<number, Phaser.GameObjects.Image>();
     const posOf = (index: number) => ({ c: index % 4, r: Math.floor(index / 4) });
     const gridXY = (index: number) => {
       const { c, r } = posOf(index);
       return { x: boardX + c * cellW + cellW / 2, y: boardY + r * cellH + cellH / 2 };
     };
+
+    // 空位标记：暗格 + 细描边，随空格移动刷新——玩家始终看得出"缺口"在哪
+    const blankMark = this.add.graphics();
+    layer.add(blankMark);
+    const drawBlank = () => {
+      const p = gridXY(cells.indexOf(15));
+      blankMark.clear();
+      blankMark.fillStyle(0x1a1512, 0.14);
+      blankMark.fillRect(p.x - cellW / 2 + 3, p.y - cellH / 2 + 3, cellW - 6, cellH - 6);
+      blankMark.lineStyle(2, 0x8a6d3b, 0.5);
+      blankMark.strokeRect(p.x - cellW / 2 + 3, p.y - cellH / 2 + 3, cellW - 6, cellH - 6);
+    };
+    drawBlank();
 
     for (let pos = 0; pos < 16; pos++) {
       const tile = cells[pos];
@@ -412,6 +443,7 @@ export default class RoomScene extends Phaser.Scene {
           cells[blank] = tile;
           cells[at] = 15;
           blank = at;
+          drawBlank();
           const target = gridXY(blank);
           this.tweens.add({
             targets: img,
@@ -456,10 +488,17 @@ export default class RoomScene extends Phaser.Scene {
 
     const layer = this.add.container(0, 0).setDepth(200);
     this.panel = layer;
-    const dim = this.add.rectangle(480, 270, ROOM_WIDTH, ROOM_HEIGHT, 0x060e0a, 0.78).setInteractive();
-    layer.add(dim);
-    layer.add(this.panelTitle(480, 80, '旋转旋钮，调一个频道'));
-    this.addCloseButton(layer, 916, 40);
+    this.panelBackdrop(layer);
+    layer.add(this.panelTitle(480, 74, '旋转旋钮，调一个频道'));
+    this.addCloseButton(layer, 922, 34);
+
+    // 收音机特写放在与拼图同款的暖纸底板上——两套玩法读作同一个"把旧物放到桌前细看"
+    const radioPlate = this.add.graphics();
+    radioPlate.fillStyle(0xf0e8d4, 1);
+    radioPlate.fillRoundedRect(480 - 210, 226 - 135, 420, 270, 10);
+    radioPlate.lineStyle(3, 0x8a6d3b, 1);
+    radioPlate.strokeRoundedRect(480 - 210, 226 - 135, 420, 270, 10);
+    layer.add(radioPlate);
 
     const radioImg = this.add.image(480, 226, 'room-radio').setScale(0.95);
     layer.add(radioImg);
@@ -515,10 +554,9 @@ export default class RoomScene extends Phaser.Scene {
     this.interacting = true;
     const layer = this.add.container(0, 0).setDepth(200);
     this.panel = layer;
-    const dim = this.add.rectangle(480, 270, ROOM_WIDTH, ROOM_HEIGHT, 0x060e0a, 0.78).setInteractive();
-    layer.add(dim);
-    layer.add(this.panelTitle(480, 62, '把指针调到接她放学的时间'));
-    this.addCloseButton(layer, 916, 40);
+    this.panelBackdrop(layer);
+    layer.add(this.panelTitle(480, 58, '把指针调到接她放学的时间'));
+    this.addCloseButton(layer, 922, 34);
 
     let hour = 12;
     let minute = 0;
@@ -690,6 +728,12 @@ export default class RoomScene extends Phaser.Scene {
 
   // ---------- HUD / 面板公共件 ----------
 
+  /** 面板遮光：与 D 的文字面板（blur+brightness .79）观感对齐，三个玩法面板统一 */
+  private panelBackdrop(layer: Phaser.GameObjects.Container): void {
+    const dim = this.add.rectangle(480, 270, ROOM_WIDTH, ROOM_HEIGHT, 0x0c1310, 0.66).setInteractive();
+    layer.add(dim);
+  }
+
   private buildHud(): void {
     // 210：盖过谜题面板的暗幕（200），时钟答错的提示才看得见
     this.hudLayer = this.add
@@ -743,26 +787,28 @@ export default class RoomScene extends Phaser.Scene {
   }
 
   private panelTitle(x: number, y: number, text: string): Phaser.GameObjects.Text {
+    // 与 D 的文字面板同款标题色/字号，玩法面板与文字面板读作同一套界面
     return this.add
       .text(x, y, text, {
         fontFamily: 'sans-serif',
-        fontSize: '24px',
-        color: '#ffe9a8',
+        fontSize: '20px',
+        color: '#f0dfb5',
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setShadow(0, 1, '#06090a', 3);
   }
 
   private addCloseButton(layer: Phaser.GameObjects.Container, x: number, y: number): void {
     const btn = this.add
-      .text(x, y, '× 关闭', {
-        fontFamily: 'sans-serif',
-        fontSize: '22px',
-        color: '#f4f9f2',
-        backgroundColor: 'rgba(6, 14, 10, 0.62)',
-        padding: { x: 12, y: 6 },
+      .text(x, y, '×', {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '28px',
+        color: '#f0dfb5',
       })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
+    btn.on('pointerover', () => btn.setColor('#fff7e4'));
+    btn.on('pointerout', () => btn.setColor('#f0dfb5'));
     btn.on('pointerdown', () => this.closePanel());
     layer.add(btn);
   }

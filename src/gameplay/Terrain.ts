@@ -128,11 +128,18 @@ export class Terrain {
     }
 
     if (this.scene.textures.exists(TEXTURE.ground)) {
-      // 茉莉花篱笆顶面：顶部高出碰撞线 8px，角色脚踩进花丛； TileSprite 平铺
+      // 茉莉花篱笆顶面：顶部高出碰撞线 8px，角色脚踩进花丛；TileSprite 平铺。
+      // 缩放/色差按块微调，打散"同一花纹无限重复"的贴图感
+      const jitter = (((x * 7) % 7) - 3) / 1000;
       const hedge = this.scene.add
         .tileSprite(x, y - 8, width, 52, TEXTURE.ground)
         .setOrigin(0, 0);
-      hedge.setTileScale(0.236, 0.236);
+      hedge.setTileScale(0.236 + jitter, 0.236 + jitter);
+      hedge.setTint(x % 240 < 120 ? 0xf6f9f2 : 0xe9efe4);
+      // 可站立识别线（可读性约定）：贴图模式下也画，落在碰撞顶面上，脚底与"表面"有稳定接触读法
+      const edge = this.scene.add.graphics();
+      edge.lineStyle(2, COLORS.grassEdge, 0.35);
+      edge.lineBetween(x + 2, y + 1, x + width - 2, y + 1);
     } else {
       g.fillStyle(COLORS.grass, 1);
       g.fillRect(x, y, width, GRASS_LIP);
@@ -148,12 +155,33 @@ export class Terrain {
 
   /** 薄浮空平台：茉莉花板贴图（B）；无贴图时退回圆角草板 */
   private drawFloat(x: number, y: number, width: number, height: number): void {
+    // 板下的垂草与根须：打破"整齐矩形块"的轮廓，让花板像长出来的
+    const wisps = this.scene.add.graphics();
+    wisps.fillStyle(COLORS.grassBlade, 0.9);
+    for (let i = 0; i < Math.max(3, Math.round(width / 46)); i++) {
+      const wx = x + 12 + (((i * 61 + Math.round(x)) * 13) % Math.max(1, width - 24));
+      const len = 8 + (((i * 29 + Math.round(x)) % 9));
+      wisps.fillTriangle(wx - 2, y + 42, wx + 2, y + 42, wx, y + 42 + len);
+    }
+    wisps.lineStyle(2, COLORS.root, 0.7);
+    for (const sideX of [x + 6, x + width - 6]) {
+      wisps.beginPath();
+      wisps.moveTo(sideX, y + 44);
+      wisps.lineTo(sideX + (sideX < x + width / 2 ? -4 : 4), y + 56);
+      wisps.strokePath();
+    }
+
     if (this.scene.textures.exists(TEXTURE.float)) {
-      // 花板略宽于碰撞体（两侧各探出 8px），顶面与碰撞线齐平
+      // 花板略宽于碰撞体（两侧各探出 8px），顶面与碰撞线齐平；缩放/色差微调防重复
+      const jitter = (((Math.round(x) * 11) % 5) - 2) / 1000;
       const board = this.scene.add
         .tileSprite(x - 8, y - 6, width + 16, 52, TEXTURE.float)
         .setOrigin(0, 0);
-      board.setTileScale(0.36, 0.36);
+      board.setTileScale(0.36 + jitter, 0.36 + jitter);
+      board.setTint(Math.round(x) % 260 < 130 ? 0xf4f8f1 : 0xe8efe6);
+      const edge = this.scene.add.graphics();
+      edge.lineStyle(2, COLORS.grassEdge, 0.5);
+      edge.lineBetween(x - 4, y + 1, x + width + 4, y + 1);
       return;
     }
     const g = this.scene.add.graphics();

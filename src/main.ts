@@ -32,31 +32,23 @@ class MenuScene extends Phaser.Scene {
 
     createMenuMemoryBackground(this);
 
-    // 轻压暗背景，并为操作说明加底色，让文字在花海上仍然清楚。
-    this.add.rectangle(BASE_WIDTH / 2, BASE_HEIGHT / 2, BASE_WIDTH, BASE_HEIGHT, 0x0b1712, 0.22)
+    // 阅读区：顶部向下渐隐的暗带——标题和按钮在亮花海上有稳定落点，花海仍在画面下方呼吸
+    this.add.rectangle(BASE_WIDTH / 2, BASE_HEIGHT / 2, BASE_WIDTH, BASE_HEIGHT, 0x0b1712, 0.18)
       .setDepth(-19);
-    this.add.rectangle(480, 484, 860, 104, 0x10251d, 0.65)
-      .setDepth(-18);
+    const band = this.add.graphics().setDepth(-18);
+    band.fillGradientStyle(0x0b1712, 0x0b1712, 0x0b1712, 0x0b1712, 0.5, 0.5, 0, 0);
+    band.fillRect(0, 0, BASE_WIDTH, 340);
 
     this.add.text(480, 170, 'RECALL', {
       fontSize: '64px',
       color: '#e6cf97',
     }).setOrigin(0.5).setShadow(0, 2, '#0b1712', 6, false, true);
 
-    this.add.text(480, 250, '2D 解谜冒险 Demo', {
-      fontSize: '22px',
+    // 一句与回忆有关的文案（操作说明不放在启动页，由森林第一区的区域提示承担）
+    this.add.text(480, 250, '把和外公的回忆，一片片找回来', {
+      fontSize: '20px',
       color: '#d3ddd5',
     }).setOrigin(0.5).setShadow(0, 2, '#0b1712', 4, false, true);
-    // 菜单只保留简短操作说明；藤蔓/花朵操作在森林内按区域提示
-    this.add.text(480, 446, [
-      '移动：A / D 或 ← / →　　跳跃：空格（空中可再跳）',
-      '开始与爷爷的记忆之旅吧',
-    ], {
-      fontSize: '16px',
-      color: '#b8c2cc',
-      align: 'center',
-      lineSpacing: 8,
-    }).setOrigin(0.5, 0);
 
     if (this.sound.locked) {
       const musicHint = this.add.text(480, 520, '点击页面空白处开启音乐', {
@@ -70,23 +62,23 @@ class MenuScene extends Phaser.Scene {
       });
     }
 
-    // 开始按钮组件：圆角底板 + 悬停金边/微放大 + 按压回弹
+    // 开始按钮组件：深底 + 金字 + 金边（全页唯一的视觉语言：金色=回忆/发光物）
     const button = this.add.container(480, 360);
     const plate = this.add
-      .rectangle(0, 0, 224, 64, 0x3a624d, 1)
-      .setStrokeStyle(2, 0x2c4a3a, 1)
+      .rectangle(0, 0, 236, 64, 0x1d332a, 1)
+      .setStrokeStyle(2, 0xe6cf97, 0.85)
       .setInteractive({ useHandCursor: true });
     const label = this.add
-      .text(0, 0, '开始游戏', { fontSize: '26px', color: '#ffffff' })
+      .text(0, 0, '开始回忆', { fontSize: '26px', color: '#f0dfb5' })
       .setOrigin(0.5);
     button.add([plate, label]);
 
     plate.on('pointerover', () => {
-      plate.setStrokeStyle(2, 0xe6cf97, 1);
+      plate.setStrokeStyle(3, 0xf6e7b8, 1);
       this.tweens.add({ targets: button, scale: 1.04, duration: 120, ease: 'Quad.easeOut' });
     });
     plate.on('pointerout', () => {
-      plate.setStrokeStyle(2, 0x2c4a3a, 1);
+      plate.setStrokeStyle(2, 0xe6cf97, 0.85);
       this.tweens.add({ targets: button, scale: 1, duration: 120, ease: 'Quad.easeOut' });
     });
     plate.on('pointerdown', () => {

@@ -110,6 +110,8 @@ export class Player {
    * （“动作跳帧”），对进度做低通滤波后帧序号只会逐步推进
    */
   private airPose = 0;
+  /** 抓藤期间的姿势帧（1=伸展 / 2=抓握 / 3=下探），变化时才换帧 */
+  private vinePoseFrame = -1;
   private prevAirAnim: 'yuyu-jump' | 'yuyu-fall' = 'yuyu-jump';
   /** 最近一次踩到的地面高度：用于接触阴影随离地高度淡化 */
   private lastGroundY = 0;
@@ -361,7 +363,8 @@ export class Player {
   }
 
   /** 抓藤悬挂时身体中心与握点的距离：让画面上的手正好落在花环处 */
-  private static readonly VINE_HANG_PX = 18;
+  /** 抓藤悬挂距离：举手帧的手（sprite 顶端附近）正好扣在花环握点上，头在环下方 */
+  private static readonly VINE_HANG_PX = 42;
 
   /** 抓住藤蔓：停用物理体，由藤蔓摆荡驱动位置 */
   attachVine(vine: Vine): void {
@@ -373,10 +376,17 @@ export class Player {
     // 抓住瞬间“收紧”：定格举手帧 + 轻微压缩脉冲，手扣住花环
     this.sprite.anims.stop();
     this.currentAnim = '';
+    this.vinePoseFrame = 2;
     this.sprite.setTexture('char-yuyu-jump', 2);
     this.squash(1.07, 0.93);
     this.shadow.setAlpha(0.1);
     this.view.setRotation(0);
+    // 立刻把手对到握点上（不等下一帧，避免“碰巧飘在旁边”的一拍）
+    const hang = Player.VINE_HANG_PX;
+    this.view.setPosition(
+      vine.handX - Math.sin(vine.angle) * hang,
+      vine.handY + Math.cos(vine.angle) * hang,
+    );
   }
 
   /** 松手甩出：按藤蔓当前摆速的切向速度 + 向上助力 */
@@ -416,7 +426,14 @@ export class Player {
       (this.isDown('S') || this.isDown('DOWN') ? 1 : 0);
     vine.update(delta, { dirX, climb });
 
-    // 双手抓在握点上（身体中心悬在握点下方 VINE_HANG_PX），随摆角倾斜成钟摆
+    // 关键姿势：向上爬=伸展抓高（帧1），静止=抓握（帧2），向下爬=收身下探（帧3）
+    const poseFrame = climb > 0 ? 1 : climb < 0 ? 3 : 2;
+    if (poseFrame !== this.vinePoseFrame) {
+      this.vinePoseFrame = poseFrame;
+      this.sprite.setTexture('char-yuyu-jump', poseFrame);
+    }
+
+    // 双手抓在握点上（手=悬挂点，头在环下方），随摆角倾斜成钟摆
     const hang = Player.VINE_HANG_PX;
     this.view.setPosition(
       vine.handX - Math.sin(vine.angle) * hang,
