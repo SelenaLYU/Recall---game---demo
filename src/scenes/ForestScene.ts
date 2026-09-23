@@ -7,6 +7,23 @@ import { applyHDCamera, bufferScaleOf, screenRefScaleOf } from '../systems/Resol
 import { showForestLoadingUI } from '../ui/ForestLoadingUI';
 import { Vine } from '../gameplay/Vine';
 import { Flower } from '../gameplay/Flower';
+import idleUrl from '../../assets/character/char-yuyu-idle-right-96x112-4f.png?url';
+import runUrl from '../../assets/character/char-yuyu-run-right-96x112-8f.png?url';
+import jumpUrl from '../../assets/character/char-yuyu-jump-right-96x112-4f.png?url';
+import fallUrl from '../../assets/character/char-yuyu-fall-right-96x112-4f.png?url';
+import forestBgUrl from '../../assets/environment/森林花海_原场景清晰化_无坡_1920x1080_v2.png?url';
+import groundUrl from '../../assets/environment/env-jasmine-ground-platform-1640x220.png?url';
+import platformUrl from '../../assets/environment/env-jasmine-platform-512x144.png?url';
+import vineUrl from '../../assets/environment/env-jasmine-vine-128x512.png?url';
+import branchUrl from '../../assets/environment/env-jasmine-support-branch-1280x384.png?url';
+import doorUrl from '../../assets/environment/env-manchurian-jasmine-door-256x384.png?url';
+import keyUrl from '../../assets/environment/item-golden-jasmine-key-192x256.png?url';
+import giantPlantUrl from '../../assets/environment/env-giant-jasmine-plant-256x384.png?url';
+import treeUrl from '../../assets/environment/env-tree-watercolor-256x320.png?url';
+import slopeUrl from '../../assets/environment/env-flower-slope-transparent-1920x1080.png?url';
+import footstepUrl from '../../assets/audio/sfx-footstep.wav?url';
+import jumpSfxUrl from '../../assets/audio/sfx-jump.wav?url';
+import forestBgmUrl from '../../assets/audio/forest-bgm.mp3?url';
 
 const WORLD_WIDTH = 2880;
 const WORLD_HEIGHT = 640;
@@ -59,42 +76,42 @@ export default class ForestScene extends Phaser.Scene {
   preload(): void {
     showForestLoadingUI(this);
 
-    const base = 'assets/character/';
-    this.load.spritesheet('char-yuyu-idle', `${base}char-yuyu-idle-right-96x112-4f.png`, {
+    this.load.spritesheet('char-yuyu-idle', idleUrl, {
       frameWidth: 96,
       frameHeight: 112,
     });
-    this.load.spritesheet('char-yuyu-run', `${base}char-yuyu-run-right-96x112-8f.png`, {
+    this.load.spritesheet('char-yuyu-run', runUrl, {
       frameWidth: 96,
       frameHeight: 112,
     });
-    this.load.spritesheet('char-yuyu-jump', `${base}char-yuyu-jump-right-96x112-4f.png`, {
+    this.load.spritesheet('char-yuyu-jump', jumpUrl, {
       frameWidth: 96,
       frameHeight: 112,
     });
-    this.load.spritesheet('char-yuyu-fall', `${base}char-yuyu-fall-right-96x112-4f.png`, {
+    this.load.spritesheet('char-yuyu-fall', fallUrl, {
       frameWidth: 96,
       frameHeight: 112,
     });
-    this.load.image('env-forest-bg', 'assets/environment/森林花海_原场景清晰化_无坡_1920x1080_v2.png');
+    this.load.image('env-forest-bg', forestBgUrl);
     // 茉莉花森林套装（B 交付）
-    this.load.image('env-jasmine-ground', 'assets/environment/env-jasmine-ground-platform-1640x220.png');
-    this.load.image('env-jasmine-platform', 'assets/environment/env-jasmine-platform-512x144.png');
-    this.load.image('env-jasmine-vine', 'assets/environment/env-jasmine-vine-128x512.png');
-    this.load.image('env-jasmine-branch', 'assets/environment/env-jasmine-support-branch-1280x384.png');
-    this.load.image('env-jasmine-door', 'assets/environment/env-manchurian-jasmine-door-256x384.png');
-    this.load.image('item-golden-key', 'assets/environment/item-golden-jasmine-key-192x256.png');
-    this.load.image('env-giant-jasmine-plant', 'assets/environment/env-giant-jasmine-plant-256x384.png');
-    this.load.image('env-tree-watercolor', 'assets/environment/env-tree-watercolor-256x320.png');
-    this.load.image('env-flower-slope', 'assets/environment/env-flower-slope-transparent-1920x1080.png');
-    this.load.audio('sfx-footstep', 'assets/audio/sfx-footstep.m4a');
-    this.load.audio('sfx-jump', 'assets/audio/sfx-jump.wav');
-    this.load.audio('forest-bgm', 'assets/audio/forest-bgm.mp3');
+    this.load.image('env-jasmine-ground', groundUrl);
+    this.load.image('env-jasmine-platform', platformUrl);
+    this.load.image('env-jasmine-vine', vineUrl);
+    this.load.image('env-jasmine-branch', branchUrl);
+    this.load.image('env-jasmine-door', doorUrl);
+    this.load.image('item-golden-key', keyUrl);
+    this.load.image('env-giant-jasmine-plant', giantPlantUrl);
+    this.load.image('env-tree-watercolor', treeUrl);
+    this.load.image('env-flower-slope', slopeUrl);
+    this.load.audio('sfx-footstep', footstepUrl);
+    this.load.audio('sfx-jump', jumpSfxUrl);
+    this.load.audio('forest-bgm', forestBgmUrl);
   }
 
   /** 森林专属配乐：首次用户操作后解锁，离开森林时停止并清理。 */
   private startForestMusic(): void {
     this.stopForestMusic();
+    if (!this.cache.audio.exists('forest-bgm')) return;
     this.forestMusic = this.sound.add('forest-bgm', { loop: true, volume: 0.35 });
 
     const start = () => {
@@ -367,9 +384,6 @@ export default class ForestScene extends Phaser.Scene {
         .image(SLOPE_X0, PLATEAU_TOP - RIDGE_Y0 * SLOPE_SCALE, 'env-flower-slope')
         .setOrigin(0, 0)
         .setScale(SLOPE_SCALE)
-        // 崖沿实际止于素材 x≈1409；右侧还有一道极淡的横向水彩残痕，
-        // 缩放后悬在谷隙上方像"辅助线"——裁掉（2026-09-23 实测定位）
-        .setCrop(0, 0, 1410, 1080)
         .setDepth(0);
     }
     this.terrain.addPlatform({ x: 580, y: 480, width: 100, height: 24, kind: 'float' });

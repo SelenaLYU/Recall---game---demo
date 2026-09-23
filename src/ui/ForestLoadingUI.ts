@@ -6,6 +6,8 @@ const HEIGHT = 540;
 const STYLE_ID = 'recall-forest-loading-style';
 const INTRO_MIN_VISIBLE_MS = 4000;
 const FOREST_MIN_VISIBLE_MS = 2500;
+const FOREST_SCENE_SETTLE_MS = 350;
+const FOREST_FADE_MS = 500;
 
 export interface LoadingUIHandle {
   finish(onHidden?: () => void): void;
@@ -80,7 +82,7 @@ function installStyle(): void {
   document.head.append(style);
 }
 
-/** Shows the real Phaser loader progress and keeps the transition visible for at least four seconds. */
+/** Shows real loader progress, then gently reveals the ready forest scene. */
 export function showForestLoadingUI(
   scene: Phaser.Scene,
   title = '正在走进森林',
@@ -116,6 +118,7 @@ export function showForestLoadingUI(
 
   let destroyed = false;
   let finishTimer: ReturnType<typeof setTimeout> | undefined;
+  let settleTimer: ReturnType<typeof setTimeout> | undefined;
   const onHiddenCallbacks: Array<() => void> = [];
   const position = () => {
     const bounds = scene.game.canvas.getBoundingClientRect();
@@ -134,6 +137,7 @@ export function showForestLoadingUI(
     if (destroyed) return;
     destroyed = true;
     if (finishTimer) clearTimeout(finishTimer);
+    if (settleTimer) clearTimeout(settleTimer);
     scene.load.off(Phaser.Loader.Events.PROGRESS, progress);
     scene.events.off(Phaser.Scenes.Events.CREATE, onSceneCreated);
     scene.events.off(Phaser.Scenes.Events.SHUTDOWN, destroy);
@@ -150,13 +154,17 @@ export function showForestLoadingUI(
     if (onHidden) onHiddenCallbacks.push(onHidden);
     if (finishTimer) return;
     const remaining = Math.max(0, minVisibleMs - (performance.now() - shownAt));
-    finishTimer = setTimeout(destroy, remaining);
+    finishTimer = setTimeout(() => {
+      root.style.transition = `opacity ${FOREST_FADE_MS}ms ease-in-out`;
+      root.style.opacity = '0';
+      finishTimer = setTimeout(destroy, FOREST_FADE_MS);
+    }, remaining);
   };
   const onSceneCreated = () => {
     progress(1);
-    // Leave a short buffer for the first frame without depending on animation
-    // frames, which browsers can pause in a background tab.
-    setTimeout(() => finish(), 100);
+    // The forest camera fades in under this cover; reveal it after that fade.
+    // A timer avoids depending on a render event that may not fire in a hidden tab.
+    settleTimer = setTimeout(() => finish(), FOREST_SCENE_SETTLE_MS);
   };
   document.body.append(root);
   position();
