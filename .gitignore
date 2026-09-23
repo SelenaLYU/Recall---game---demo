@@ -146,3 +146,6 @@ dist/
 
 # Playwright MCP 测试截图缓存
 .playwright-mcp/
+
+# Mimosa 安全扫描工具的本地状态
+.mimosa/
