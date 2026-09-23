@@ -679,25 +679,40 @@ export default class RoomScene extends Phaser.Scene {
   private spawnMemoryOrb(): void {
     // 悬在方桌上空（挂钟 234 与桌面 360 之间），避开挂钟与相框
     this.memoryOrb = this.add.container(480, 305).setDepth(6);
-    const glow = this.add.ellipse(0, 0, 110, 110, GOLD, 0.2);
-    const core = this.add.circle(0, 0, 26, GOLD).setStrokeStyle(3, 0xf6e7b8, 0.9);
+    // 光球替换（2026-09-24）：平涂圆+椭圆光晕 → 径向渐变"软核光球"贴图
+    //（中心亮核→金晕→透明），纹理全局只生成一次
+    if (!this.textures.exists('orb-glow')) {
+      const cnv = document.createElement('canvas');
+      cnv.width = 160;
+      cnv.height = 160;
+      const ctx = cnv.getContext('2d')!;
+      const grad = ctx.createRadialGradient(80, 80, 6, 80, 80, 78);
+      grad.addColorStop(0, 'rgba(255, 246, 220, 1)');
+      grad.addColorStop(0.32, 'rgba(240, 220, 168, 0.92)');
+      grad.addColorStop(0.62, 'rgba(230, 207, 151, 0.32)');
+      grad.addColorStop(1, 'rgba(230, 207, 151, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 160, 160);
+      this.textures.addCanvas('orb-glow', cnv);
+    }
+    const orb = this.add.image(0, 0, 'orb-glow').setScale(0.85);
     const hit = this.add.circle(0, 0, 44, 0xffffff, 0).setInteractive({ useHandCursor: true });
     hit.on('pointerdown', () => this.touchMemoryOrb());
-    this.memoryOrb.add([glow, core, hit]);
+    this.memoryOrb.add([orb, hit]);
     // 球本体也点亮房间（有来源的金色光，随呼吸明暗）
     this.orbLight = this.lights.addLight(480, 305, 240, GOLD, 0.8);
     this.tweens.add({
-      targets: this.memoryOrb,
-      y: 291,
+      targets: orb,
+      scale: 0.95,
       duration: 1500,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
     this.tweens.add({
-      targets: glow,
-      alpha: { from: 0.12, to: 0.32 },
-      duration: 1200,
+      targets: this.memoryOrb,
+      y: 291,
+      duration: 1500,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
@@ -710,7 +725,6 @@ export default class RoomScene extends Phaser.Scene {
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
-    Effects.ring(this, 480, 305);
     this.sfx.door();
     this.showHint('三块碎片融成了记忆球——点击它');
   }

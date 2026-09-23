@@ -153,7 +153,7 @@ export class Terrain {
         .tileSprite(x - 8, y - 6, width + 16, 52, TEXTURE.float)
         .setOrigin(0, 0);
       board.setTileScale(0.36 + jitter, 0.36 + jitter);
-      board.setTint(Math.round(x) % 260 < 130 ? 0xf4f8f1 : 0xe8efe6);
+      board.setTint(0xf0f6ee);
       // 两端贴一朵垂出来的小花（B 的 bloom 素材）：软化笔直的贴图断口，
       // 让花板像"长出来的一丛"而不是被切齐的矩形块
       if (this.scene.textures.exists(TEXTURE.bloom)) {
@@ -167,7 +167,7 @@ export class Terrain {
             .setOrigin(0.5, 0.5)
             .setScale(0.3 + (((seed * 13) % 5) / 100))
             .setAngle(sway)
-            .setTint(Math.round(x) % 260 < 130 ? 0xf4f8f1 : 0xe8efe6);
+            .setTint(0xf0f6ee);
           this.scene.tweens.add({
             targets: bloom,
             angle: sway + 4,

@@ -4,6 +4,7 @@ import { Terrain } from '../gameplay/Terrain';
 import { Effects } from '../gameplay/Effects';
 import { Sfx } from '../systems/Sfx';
 import { applyHDCamera, bufferScaleOf, screenRefScaleOf } from '../systems/Resolution';
+import { createTouchControls, type TouchControlsHandle } from '../ui/TouchControls';
 import { showForestLoadingUI } from '../ui/ForestLoadingUI';
 import { Vine } from '../gameplay/Vine';
 import { Flower } from '../gameplay/Flower';
@@ -51,6 +52,7 @@ export default class ForestScene extends Phaser.Scene {
   private hintText!: Phaser.GameObjects.Text;
   private hudKey!: Phaser.GameObjects.Container;
   private forestMusic?: Phaser.Sound.BaseSound;
+  private touchControls?: TouchControlsHandle;
   private forestMusicUnlock?: () => void;
 
   private hasKey = false;
@@ -157,6 +159,8 @@ export default class ForestScene extends Phaser.Scene {
   create(): void {
     // 场景实例在重玩时会被复用，属性初始化器不会重新执行：
     // 所有玩法状态必须在这里重置（AGENTS.md 第 5 节），否则重玩卡死
+    this.touchControls?.destroy();
+    this.touchControls = undefined;
     this.hasKey = false;
     this.doorEntered = false;
     this.restarting = false;
@@ -181,6 +185,11 @@ export default class ForestScene extends Phaser.Scene {
     this.buildVineBranch();
     this.buildTerrain();
     this.buildPlayer();
+    // 手机版触摸控制（粗指针设备才显示；桌面无感）
+    this.touchControls = createTouchControls(this, {
+      setMove: dir => this.player.setTouchMove(dir),
+      pressJump: held => this.player.pressTouchJump(held),
+    });
     this.buildFlowers();
     this.buildVines();
     this.buildItems();
@@ -230,7 +239,7 @@ export default class ForestScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(-9)
       // 轻微降饱和压亮度，让花海退到“远景”，前景路线/角色成为主次（配合深度雾）
-      .setTint(0xb0bfb4);
+      .setTint(0xa8b5aa);
     this.sfBackdrop.setScale(1.02 * screenRefScaleOf(this));
   }
 
@@ -331,7 +340,7 @@ export default class ForestScene extends Phaser.Scene {
       if (texture && ctx) {
         const gradient = ctx.createLinearGradient(0, 130, 0, 540);
         gradient.addColorStop(0, 'rgba(10, 26, 19, 0)');
-        gradient.addColorStop(0.45, 'rgba(10, 26, 19, 0.5)');
+        gradient.addColorStop(0.45, 'rgba(10, 26, 19, 0.56)');
         gradient.addColorStop(1, 'rgba(10, 26, 19, 0.82)');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, 960, 540);
@@ -596,8 +605,6 @@ export default class ForestScene extends Phaser.Scene {
       if (onFlower.bouncy) {
         body.setVelocityY(FLOWER_BOUNCE);
         this.sfx.bounce();
-        // 关键瞬间光：弹起时一圈淡粉光环（有来源的动态光，见 AGENTS.md 光影约定）
-        Effects.ring(this, onFlower.x, onFlower.top, 0xf3c2d8);
       } else {
         // 普通花反馈：花本体极轻下沉+暖光一闪（软垫读法）+ 脚步声——
         // 不摇不摆、无粒子无光圈（历次反馈形式的收敛，见 Flower.press 注释）
