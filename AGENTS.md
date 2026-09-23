@@ -30,10 +30,13 @@
 | --- | --- | --- |
 | C | `src/scenes/ForestScene.ts`、`src/scenes/RoomScene.ts`、`src/gameplay/**`、`src/systems/Sfx.ts` | 森林/房间玩法、引擎模块、程序化音效 |
 | D | `src/main.ts`、`src/MenuMemoryBackground.ts`、`src/MenuRoomMusic.ts`、`src/scenes/IntroScene.ts`、`src/scenes/EndingScene.ts`、场景登记 | 启动配置、开场/结尾、菜单及房间配乐衔接 |
-| A | `src/ui/**` | UI 组件 |
+| D（房间文字 UI） | `src/ui/RoomTextPanel.ts`、`src/ui/RoomInteractionCopy.ts` | 日历、照片、花盆、鱼缸及其他房间物件的统一文字查看界面 |
+| A | `src/ui/**`（上述两个文件除外） | 其他 UI 组件 |
 | B | `assets/**` | 素材 |
 
 改别人的文件前先在群里/PR 里打招呼。`src/systems/` 目前预留给共享系统（如存档、音频管理），放东西前先约定。
+
+房间文字交互由 C 在 `RoomScene` 的对应点击/谜题完成事件中调用 `RoomInteractionCopy.ts` 的函数；房间场景不再另外绘制一套文字框。照片原图到货后，完成华容道时把该图片 URL 传给 `showPhotoMemoryText`。组件打开时暂停当前场景，关闭后恢复，并在场景退出时清理界面。
 
 ## 5. 技术约定（已定稿，勿另起炉灶）
 
