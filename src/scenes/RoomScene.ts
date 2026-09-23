@@ -481,6 +481,7 @@ export default class RoomScene extends Phaser.Scene {
         .image(0, 0, tileKey)
         .setDisplaySize(cellW, cellH)
         .setInteractive({ useHandCursor: true });
+      const tileScale = img.scaleX;
       const { x, y } = gridXY(pos);
       img.setPosition(x, y);
       layer.add(img);
@@ -523,6 +524,11 @@ export default class RoomScene extends Phaser.Scene {
         if (this.puzzleSolved) {
           return;
         }
+        // 快速连拖时上一次的回弹/moveTo tween 还在改坐标，会和增量跟随叠加成
+        // “块一直飘在指针旁边”的错位——抓起来先杀干净
+        this.tweens.killTweensOf(img);
+        // 拖拽手感：抓起的块瞬时微放大“提起来”（7% 幅度用瞬时值，不与位移 tween 抢对象）
+        img.setScale(tileScale * 1.07);
         prevDx = null;
         prevDy = null;
         movedWorld = 0;
@@ -543,6 +549,8 @@ export default class RoomScene extends Phaser.Scene {
         prevDy = dy;
       });
       img.on('dragend', () => {
+        // 松手缩放归位（瞬时值；位移交给落格 tween，互不抢对象）
+        img.setScale(tileScale);
         if (this.puzzleSolved || movedWorld < 8) {
           return; // 纯点击已由 pointerup 处理
         }
@@ -572,6 +580,52 @@ export default class RoomScene extends Phaser.Scene {
         }
       });
     }
+
+    // 一键拼好：不想逐块拖时直接收束到完成态（演示/快速看回忆的通路），
+    // 走与手动完成完全相同的完成演出与发碎片流程（playPuzzleCompletion）
+    const autoSolve = () => {
+      if (this.puzzleSolved) {
+        return;
+      }
+      this.puzzleSolved = true; // 锁住输入，防止动画期间继续拖动换位
+      for (let i = 0; i < 16; i++) {
+        cells[i] = i;
+      }
+      blank = 15;
+      drawBlank();
+      let delay = 0;
+      for (let t = 0; t < 15; t++) {
+        const image = tileImages.get(t);
+        if (!image) {
+          continue;
+        }
+        const dest = gridXY(t);
+        this.tweens.killTweensOf(image);
+        this.tweens.add({
+          targets: image,
+          x: dest.x,
+          y: dest.y,
+          duration: 260,
+          delay,
+          ease: 'Cubic.easeOut',
+        });
+        delay += 46;
+      }
+      this.sfx.collect();
+      this.time.delayedCall(delay + 300, () => this.playPuzzleCompletion(layer));
+    };
+    const autoBtn = this.add
+      .text(480, 522, '一下拼好 · 直接看回忆', {
+        fontFamily: 'sans-serif',
+        fontSize: '14px',
+        color: '#cbb98a',
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    autoBtn.on('pointerover', () => autoBtn.setColor('#fff7e4'));
+    autoBtn.on('pointerout', () => autoBtn.setColor('#cbb98a'));
+    autoBtn.on('pointerdown', autoSolve);
+    layer.add(autoBtn);
   }
 
   private onPuzzleSolved(layer: Phaser.GameObjects.Container): void {
@@ -579,6 +633,11 @@ export default class RoomScene extends Phaser.Scene {
       return;
     }
     this.puzzleSolved = true;
+    this.playPuzzleCompletion(layer);
+  }
+
+  /** 拼图完成演出（手动拼完与“一键拼好”共用）：照片合拢 → 金光扫过 → 进文字面板发碎片 */
+  private playPuzzleCompletion(layer: Phaser.GameObjects.Container): void {
     // 完成效果：完整照片淡入合拢 → 金光扫过 + 光环 → 停一拍再收起进文字面板
     const boardX = 480 - 144 * 2;
     const boardY = 108;

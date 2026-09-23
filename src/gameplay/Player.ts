@@ -147,6 +147,24 @@ export class Player {
     this.sprite = scene.add.sprite(0, this.opts.height / 2 + FOOT_PADDING_PX * SPRITE_SCALE, 'char-yuyu-idle', 0);
     this.sprite.setOrigin(0.5, 1).setScale(SPRITE_SCALE);
 
+    // 抓花帧动画（森林场景才加载抓花图；挂住后逐帧保持花心钉在花环上）
+    if (scene.textures.exists(Player.GRAB_SHEET) && !scene.anims.exists('yuyu-grab')) {
+      scene.anims.create({
+        key: 'yuyu-grab',
+        frames: scene.anims.generateFrameNumbers(Player.GRAB_SHEET, { start: 0, end: 4 }),
+        frameRate: 16,
+        repeat: 0,
+      });
+    }
+    this.sprite.on(Phaser.Animations.Events.ANIMATION_UPDATE, (
+      anim: Phaser.Animations.Animation,
+      frame: Phaser.Animations.AnimationFrame,
+    ) => {
+      if (anim.key === 'yuyu-grab') {
+        this.applyGrabFrame(frame.index ?? 0);
+      }
+    });
+
     this.view = scene.add.container(options.x, options.y, [this.shadow, this.sprite]);
 
     scene.physics.add.existing(this.view);
@@ -360,13 +378,14 @@ export class Player {
   }
 
   /** 抓藤悬挂时身体中心与握点的距离：让画面上的手正好落在花环处 */
-  /** 抓藤悬挂距离：手掌点（抓握帧内实测）到身体中心的竖直距离，手扣在花环上。
-   * 实测：jump 帧 0 举手最高（源 y≈28），27 = 47(顶距中心) − 28×0.72 */
-  private static readonly VINE_HANG_PX = 27;
-  /** 抓握帧手掌相对帧中心的横向偏移（源 65−48=17 × 0.72），用于把手钉在绳轴上 */
-  private static readonly VINE_HAND_OFF_X = 13;
-  /** 抓藤用姿势帧（举手最高的那帧） */
-  private static readonly VINE_GRAB_FRAME = 0;
+  /** 抓花专用序列（B 的 yuyu-grab 128×160 6f，帧内自带被抓的小茉莉）：
+   * 帧内花心钉在藤蔓花环上，身体绕它摆动——不再用 jump 帧近似 */
+  private static readonly GRAB_SHEET = 'char-yuyu-grab';
+  private static readonly GRAB_SCALE = 0.7;
+  /** 每帧花心（源像素，实测），换帧时保持花心不跳 */
+  private static readonly GRAB_FLOWER: Array<[number, number]> = [
+    [85, 30], [88, 29], [85, 29], [74, 28], [66, 28], [76, 28],
+  ];
 
   /** 抓住藤蔓：停用物理体，由藤蔓摆荡驱动位置 */
   attachVine(vine: Vine): void {
@@ -375,21 +394,46 @@ export class Player {
     this.body.setVelocity(0, 0);
     this.body.enable = false;
     this.opts.sfx?.grab();
-    // 抓住瞬间“收紧”：定格举手帧 + 轻微压缩脉冲，手扣住花环
+    // 换装抓花序列：帧内的小茉莉钉在花环上，播放“跳起→抓住→挂稳”
     this.sprite.anims.stop();
     this.currentAnim = '';
-    this.vinePoseFrame = Player.VINE_GRAB_FRAME;
-    this.sprite.setTexture('char-yuyu-jump', Player.VINE_GRAB_FRAME);
-    this.squash(1.07, 0.93);
+    this.vinePoseFrame = -1;
+    this.enterGrabVisual();
+    if (this.scene.anims.exists('yuyu-grab')) {
+      this.sprite.play('yuyu-grab');
+    }
     this.shadow.setAlpha(0.1);
-    // 立刻把手掌点对到握点上（不等下一帧，消除“碰巧飘在旁边”的一拍）
-    const hang = Player.VINE_HANG_PX;
-    const handOffX = -this.facing * Player.VINE_HAND_OFF_X;
-    this.view.setPosition(
-      vine.handX + Math.sin(vine.angle) * hang + handOffX * Math.cos(vine.angle),
-      vine.handY + Math.cos(vine.angle) * hang - handOffX * Math.sin(vine.angle),
-    );
+    // 容器原点=花环握点（花心钉在上面），身体随 −angle 绕它摆动
+    this.view.setScale(this.facing, 1);
+    this.view.setPosition(vine.handX, vine.handY);
     this.view.setRotation(-vine.angle);
+  }
+
+  /** 抓花视觉：精灵换抓花图、中心原点，花心对齐容器原点（=花环） */
+  private enterGrabVisual(): void {
+    this.sprite.anims.stop();
+    this.sprite.setTexture(Player.GRAB_SHEET, 0);
+    this.sprite.setOrigin(0.5, 0.5);
+    this.sprite.setScale(Player.GRAB_SCALE);
+    this.applyGrabFrame(0);
+  }
+
+  /** 按帧号换帧并把该帧花心钉在容器原点上（镜像由容器 scaleX 负责，公式不变） */
+  private applyGrabFrame(frame: number): void {
+    const index = Phaser.Math.Clamp(Math.round(frame), 0, Player.GRAB_FLOWER.length - 1);
+    const [fx, fy] = Player.GRAB_FLOWER[index];
+    const s = Player.GRAB_SCALE;
+    this.sprite.setFrame(index);
+    this.sprite.setPosition(-(fx - 64) * s, -(fy - 80) * s);
+  }
+
+  /** 离开抓藤：精灵恢复常规行走序列的挂载方式 */
+  private exitGrabVisual(): void {
+    this.sprite.anims.stop();
+    this.sprite.setTexture('char-yuyu-idle', 0);
+    this.sprite.setOrigin(0.5, 1);
+    this.sprite.setScale(SPRITE_SCALE);
+    this.sprite.setPosition(0, this.opts.height / 2 + FOOT_PADDING_PX * SPRITE_SCALE);
   }
 
   /** 松手甩出：按藤蔓当前摆速的切向速度 + 向上助力 */
@@ -401,6 +445,7 @@ export class Player {
     const velocity = vine.releaseVelocity();
     this.attachedVine = null;
     vine.startCooldown();
+    this.exitGrabVisual();
     this.body.enable = true;
     this.body.setAllowGravity(true);
     this.body.setVelocity(velocity.vx, velocity.vy);
@@ -429,25 +474,22 @@ export class Player {
       (this.isDown('S') || this.isDown('DOWN') ? 1 : 0);
     vine.update(delta, { dirX, climb });
 
-    // 关键姿势：向上爬=伸展抓高（帧1），静止=抓握（抓握帧），向下爬=收身下探（帧3）
-    const poseFrame = climb > 0 ? 1 : climb < 0 ? 3 : Player.VINE_GRAB_FRAME;
-    if (poseFrame !== this.vinePoseFrame) {
-      this.vinePoseFrame = poseFrame;
-      this.sprite.setTexture('char-yuyu-jump', poseFrame);
-    }
-
-    // 身体沿“绳的延长线”垂下，手掌点钉在花环握点上（横向偏移一并补偿），旋转 −θ 头朝锚点
-    const hang = Player.VINE_HANG_PX;
-    const handOffX = -this.facing * Player.VINE_HAND_OFF_X;
-    this.view.setPosition(
-      vine.handX + Math.sin(vine.angle) * hang + handOffX * Math.cos(vine.angle),
-      vine.handY + Math.cos(vine.angle) * hang - handOffX * Math.sin(vine.angle),
-    );
+    // 花心钉在花环上：容器原点=握点，身体绕手掌/花摆动（旋转 −θ 头朝锚点）
+    this.view.setPosition(vine.handX, vine.handY);
     this.view.setRotation(-vine.angle);
     if (dirX !== 0) {
       this.facing = dirX > 0 ? 1 : -1;
       this.displayedFacing = this.facing;
       this.view.scaleX = this.facing;
+    }
+
+    // 攀爬姿势：抓取动画播完后，爬上/挂稳=双手抓稳(4)，垂降=单手探下(3)
+    if (!this.sprite.anims.isPlaying && this.sprite.texture.key === Player.GRAB_SHEET) {
+      const frame = climb < 0 ? 3 : 4;
+      if (this.vinePoseFrame !== frame) {
+        this.vinePoseFrame = frame;
+        this.applyGrabFrame(frame);
+      }
     }
 
     if (this.justPressed('SPACE')) {
@@ -506,6 +548,7 @@ export class Player {
       this.opts.speed === 0 ? 0 : Math.min(1, Math.abs(this.body.velocity.x) / this.opts.speed);
 
     if (!onGround) {
+      this.sprite.anims.timeScale = 1;
       const vy = this.body.velocity.y;
       if (vy < -25) {
         this.airAnim = 'yuyu-jump';
@@ -549,11 +592,12 @@ export class Player {
       } else {
         this.stepTimer = 0;
       }
-    } else {
-      this.groundAnim = 'yuyu-idle';
-      this.playAnim('yuyu-idle');
-      this.stepTimer = 0;
-    }
+      } else {
+        this.groundAnim = 'yuyu-idle';
+        this.sprite.anims.timeScale = 1;
+        this.playAnim('yuyu-idle');
+        this.stepTimer = 0;
+      }
 
     // 下落纵向伸展（压扁 tween 进行中不覆盖）
     if (!onGround && !this.squashing) {
