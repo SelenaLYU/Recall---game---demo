@@ -512,18 +512,19 @@ export default class RoomScene extends Phaser.Scene {
         }
       });
 
-      // 拖拽用 Phaser 原生 drag（dragX/dragY 是世界坐标，不受动态缓冲的画布像素影响）：
-      // 自由拖到任意格子松手即换位（必可完成）
+      // 拖拽用 Phaser 原生 drag：**纯增量跟随**。实测 3.90 在 dragstart 里传的
+      // dragX/dragY 是 0（不是物件坐标），所以首 个 drag 事件只记基线不动块，
+      // 之后每帧按指针增量移动——对任何坐标系语义都免疫
       this.input.setDraggable(img);
-      let dragOffX = 0;
-      let dragOffY = 0;
+      let prevDx: number | null = null;
+      let prevDy: number | null = null;
       let movedWorld = 0;
-      img.on('dragstart', (_p: Phaser.Input.Pointer, dx: number, dy: number) => {
+      img.on('dragstart', () => {
         if (this.puzzleSolved) {
           return;
         }
-        dragOffX = img.x - dx;
-        dragOffY = img.y - dy;
+        prevDx = null;
+        prevDy = null;
         movedWorld = 0;
         layer.bringToTop(img);
       });
@@ -531,10 +532,15 @@ export default class RoomScene extends Phaser.Scene {
         if (this.puzzleSolved) {
           return;
         }
-        const nx = dx + dragOffX;
-        const ny = dy + dragOffY;
-        movedWorld += Math.hypot(nx - img.x, ny - img.y);
-        img.setPosition(nx, ny);
+        if (prevDx === null || prevDy === null) {
+          prevDx = dx;
+          prevDy = dy;
+          return;
+        }
+        movedWorld += Math.abs(dx - prevDx) + Math.abs(dy - prevDy);
+        img.setPosition(img.x + (dx - prevDx), img.y + (dy - prevDy));
+        prevDx = dx;
+        prevDy = dy;
       });
       img.on('dragend', () => {
         if (this.puzzleSolved || movedWorld < 8) {
