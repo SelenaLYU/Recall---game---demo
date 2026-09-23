@@ -1,0 +1,17 @@
+本包基于 2026-09-23 的 main（703d69f）整理；只包含 4 个代码文件和 5 个音频文件。
+没有替你上传 GitHub，也没有修改你 OneDrive 里的仓库。
+
+复制前：先在 GitHub Desktop 的 Selena-intergration 分支把当前改动 Commit 保存；
+再 Fetch origin，切到 main 点 Pull origin，切回 Selena-intergration，
+在 Branch 菜单选 Update from main。若出现冲突，先停下，不要盲选覆盖。
+
+复制时：解压本包，把里面的 src 和 assets 文件夹复制到
+Recall---game---demo 仓库根目录；Windows 提示时选择合并文件夹、替换同名文件。
+不要复制 dist 或 node_modules。
+
+检查：在 VS Code 终端运行 npm.cmd run build，再运行 npm.cmd run dev。
+开始游戏后先看到“正在加载开场动画”约 4 秒；动画结束或跳过后，
+“正在走进森林”至少 4 秒，然后出现森林。房间收音机四档依次为：
+杂音、风声、公公没有离开你、念亲恩。切换频道或关闭面板会停掉上一段。
+
+检查通过后，再由你自己在 GitHub Desktop Commit 和 Push origin。

@@ -3,6 +3,7 @@ import { Sfx } from '../systems/Sfx';
 import { Effects } from '../gameplay/Effects';
 import { applyHDCamera, bufferScaleOf } from '../systems/Resolution';
 import { showClockPuzzleUI } from '../ui/ClockPuzzleUI';
+import { showRadioPuzzleUI, type RadioPuzzleHandle } from '../ui/RadioPuzzleUI';
 import { createFragmentHud, type FragmentHudHandle } from '../ui/FragmentHud';
 import {
   showCalendarText,
@@ -12,6 +13,10 @@ import {
   showOtherRoomText,
 } from '../ui/RoomInteractionCopy';
 import photoFrameUrl from '../../assets/environment/interactive-family-zoo-photo-frame-384x256.png?url';
+import radioStaticUrl from '../../assets/audio/radio-static.mp3?url';
+import radioWindUrl from '../../assets/audio/radio-wind.mp3?url';
+import radioGrandpaUrl from '../../assets/audio/radio-grandpa.mp3?url';
+import radioSongUrl from '../../assets/audio/radio-song.mp3?url';
 
 const ROOM_WIDTH = 960;
 const ROOM_HEIGHT = 540;
@@ -116,6 +121,7 @@ export default class RoomScene extends Phaser.Scene {
   /** 有面板（拼图/收音机/时钟/文字）打开时锁定其它交互 */
   private interacting = false;
   private panel: Phaser.GameObjects.Container | null = null;
+  private radioPanel?: RadioPuzzleHandle;
   private hintTimer?: Phaser.Time.TimerEvent;
   private hintFade?: Phaser.Tweens.Tween;
   /** 拼图已解开（锁输入，播完成效果） */
@@ -127,6 +133,7 @@ export default class RoomScene extends Phaser.Scene {
   /** 记忆球/收音机打开时的动态灯（场景 shutdown 会清空 LightsManager，重启重建） */
   private orbLight?: Phaser.GameObjects.Light;
   private radioLight?: Phaser.GameObjects.Light;
+  private radioSound?: Phaser.Sound.BaseSound;
 
   constructor() {
     super('room');
@@ -147,9 +154,20 @@ export default class RoomScene extends Phaser.Scene {
         this.load.image(key, url);
       }
     }
+    const radioAudio: Array<[string, string]> = [
+      ['radio-static', radioStaticUrl],
+      ['radio-wind', radioWindUrl],
+      ['radio-grandpa', radioGrandpaUrl],
+      ['radio-song', radioSongUrl],
+    ];
+    for (const [key, url] of radioAudio) {
+      if (!this.cache.audio.exists(key)) this.load.audio(key, url);
+    }
   }
 
   create(): void {
+    this.stopRadioAudio();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.stopRadioAudio());
     // 场景复用：状态全部重置（AGENTS.md 第 5 节）；shutdown 会清空 LightsManager，灯光在下面重建
     this.fragments.clear();
     this.fragmentHud?.destroy();
@@ -159,6 +177,7 @@ export default class RoomScene extends Phaser.Scene {
     this.interacting = false;
     this.panel?.destroy();
     this.panel = null;
+    this.radioPanel = undefined;
     this.hintTimer?.remove();
     this.hintFade?.remove();
     this.hintTimer = undefined;
@@ -631,67 +650,27 @@ export default class RoomScene extends Phaser.Scene {
     this.pauseRoomBgm(true);
     // 收音机“发声”时从机身泛出一圈暖光（有来源的光）
     this.radioLight = this.lights.addLight(505, 335, 210, 0xffc98a, 0.55);
-
-    const layer = this.add.container(0, 0).setDepth(200);
-    this.panel = layer;
-    this.panelBackdrop(layer);
-    layer.add(this.panelTitle(480, 74, '旋转旋钮，调一个频道'));
-    // 同拼图面板：× 下移避开 D 的碎片 HUD 挂件（右上逻辑区 y 13..73）
-    this.addCloseButton(layer, 922, 92);
-
-    // 收音机特写放在与拼图同款的暖纸底板上——两套玩法读作同一个"把旧物放到桌前细看"
-    const radioPlate = this.add.graphics();
-    radioPlate.fillStyle(0xf0e8d4, 1);
-    radioPlate.fillRoundedRect(480 - 210, 226 - 135, 420, 270, 10);
-    radioPlate.lineStyle(3, 0x8a6d3b, 1);
-    radioPlate.strokeRoundedRect(480 - 210, 226 - 135, 420, 270, 10);
-    layer.add(radioPlate);
-
-    const radioImg = this.add.image(480, 226, 'room-radio').setScale(0.95);
-    layer.add(radioImg);
-    const channelText = this.add
-      .text(480, 366, '咔。', {
-        fontFamily: 'sans-serif',
-        fontSize: '20px',
-        color: '#f4f9f2',
-      })
-      .setOrigin(0.5);
-    layer.add(channelText);
-    const knob = this.add
-      .circle(480, 432, 34, 0x8a6d3b, 1)
-      .setStrokeStyle(3, GOLD, 1)
-      .setInteractive({ useHandCursor: true });
-    const knobText = this.add
-      .text(480, 432, '旋钮', { fontFamily: 'sans-serif', fontSize: '14px', color: '#101b16' })
-      .setOrigin(0.5);
-    layer.add([knob, knobText]);
-
-    let channel = 0;
-    knob.on('pointerdown', () => {
-      channel = (channel % 4) + 1;
-      this.tweens.add({ targets: knob, angle: knob.angle + 90, duration: 160 });
-      switch (channel) {
-        case 1:
-          this.sfx.radioStatic();
-          channelText.setText('……沙沙的杂音。');
-          break;
-        case 2:
-          this.sfx.radioWind();
-          channelText.setText('……呼呼的风声。');
-          break;
-        case 3:
-          this.sfx.radioLullaby();
-          channelText.setText('……一段哼唱的童谣。');
-          break;
-        case 4:
-          this.sfx.radioVoice();
-          channelText.setText('“鱼鱼，要健健康康地长大哦。”');
-          this.time.delayedCall(900, () => {
-            this.closePanel();
-            this.gainFragment('radio');
-          });
-          break;
-      }
+    this.radioPanel = showRadioPuzzleUI(this, {
+      onClose: () => this.closePanel(),
+      onChannelChange: channel => {
+        switch (channel) {
+          case 1:
+            this.playRadioAudio('radio-static');
+            break;
+          case 2:
+            this.playRadioAudio('radio-wind');
+            break;
+          case 3:
+            this.playRadioAudio('radio-grandpa');
+            break;
+          case 4:
+            this.playRadioAudio('radio-song');
+            this.time.delayedCall(900, () => {
+              if (this.radioPanel?.getChannel() === 4) this.gainFragment('radio');
+            });
+            break;
+        }
+      },
     });
   }
 
@@ -860,6 +839,10 @@ export default class RoomScene extends Phaser.Scene {
   }
 
   private closePanel(): void {
+    const radioPanel = this.radioPanel;
+    this.radioPanel = undefined;
+    radioPanel?.close();
+    this.stopRadioAudio();
     this.panel?.destroy();
     this.panel = null;
     this.interacting = false;
@@ -868,6 +851,27 @@ export default class RoomScene extends Phaser.Scene {
       this.radioLight = undefined;
     }
     this.pauseRoomBgm(false);
+  }
+
+  /** Switching channels or closing the panel interrupts the previous recording. */
+  private playRadioAudio(key: string): void {
+    this.stopRadioAudio();
+    if (!this.cache.audio.exists(key)) return;
+    const sound = this.sound.add(key, { volume: 0.75 });
+    this.radioSound = sound;
+    sound.once(Phaser.Sound.Events.COMPLETE, () => {
+      if (this.radioSound === sound) this.radioSound = undefined;
+      sound.destroy();
+    });
+    sound.play();
+  }
+
+  private stopRadioAudio(): void {
+    const sound = this.radioSound;
+    this.radioSound = undefined;
+    if (!sound) return;
+    sound.stop();
+    sound.destroy();
   }
 
   /** 收音机播放期间暂停房间 BGM（menu-room-bgm 由 main.ts 在 CREATE 时播放） */

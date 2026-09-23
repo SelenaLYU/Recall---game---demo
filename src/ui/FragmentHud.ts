@@ -58,7 +58,7 @@ function installStyle(): void {
     }
     .recall-fragment-hud * { box-sizing: border-box; }
     .recall-fragment-hud__card {
-      position: absolute; top: 13px; right: 14px; width: 140px; height: 60px;
+      position: absolute; bottom: 14px; left: 14px; width: 140px; height: 60px;
       display: flex; align-items: center; gap: 5px; padding: 5px 8px 5px 5px;
       border-radius: 11px 4px 11px 4px;
       border: 1px solid rgba(255,239,205,.18);
@@ -110,7 +110,7 @@ function installStyle(): void {
   document.head.append(style);
 }
 
-/** A light, three-piece jasmine that stays in the room's upper-right corner. */
+/** A light, three-piece jasmine that stays in the room's lower-left corner. */
 export function createFragmentHud(scene: Phaser.Scene): FragmentHudHandle {
   activeHuds.get(scene)?.destroy();
   installStyle();
