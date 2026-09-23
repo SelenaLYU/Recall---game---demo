@@ -11,8 +11,16 @@
         height: 100%;
         /* 页面自身不滚动：FIT 已按窗口等比缩放（小窗口曾出现整页滚动条） */
         overflow: hidden;
-        /* 与游戏底色一致：FIT 信箱黑边不突兀 */
+        /* 信箱区底色：由 main.ts 按场景同步（FIT 留边读作场景的延伸而不是黑框） */
         background: #15251f;
+        transition: background-color 0.45s ease;
+      }
+      /* 游戏容器铺满视口：尺寸路径只走 CSS，不再由 JS 设高度 */
+      #game {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
       }
     </style>
   </head>

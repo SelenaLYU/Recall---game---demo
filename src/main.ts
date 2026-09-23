@@ -7,6 +7,24 @@ import EndingScene from './scenes/EndingScene';
 import { preloadMenuRoomMusic, playMenuRoomMusic } from './MenuRoomMusic';
 import { BASE_WIDTH, BASE_HEIGHT, HD_SCALE, applyHDCamera } from './systems/Resolution';
 import menuBackgroundUrl from '../assets/environment/森林花海_原场景清晰化_无坡_1920x1080_v2.png?url';
+
+/** FIT 信箱区颜色 = 各场景自己的背景色（index.html body 有 0.45s 过渡） */
+const SCENE_LETTERBOX: Record<string, string> = {
+  menu: '#15251f',
+  intro: '#000000',
+  forest: '#17382b',
+  room: '#131a16',
+  ending: '#10151c',
+};
+/** 模块级引用：off/on 才能真正去重（与房间音乐的接法同款） */
+const syncLetterbox = new Map<string, () => void>(
+  Object.entries(SCENE_LETTERBOX).map(([key, color]) => [
+    key,
+    () => {
+      document.body.style.backgroundColor = color;
+    },
+  ]),
+);
 // 第一个场景：开始画面
 class MenuScene extends Phaser.Scene {
   constructor() {
@@ -29,6 +47,14 @@ class MenuScene extends Phaser.Scene {
 
     applyHDCamera(this);
     this.cameras.main.setBackgroundColor('#15251f');
+
+    // 信箱区颜色随场景同步：FIT 的等比留边读作"场景的延伸"，不再是固定的突兀底色
+    //（菜单是最早启动的场景，这里统一登记；off/on + 模块级引用防重玩叠加）
+    for (const [key, sync] of syncLetterbox) {
+      const target = this.scene.get(key);
+      target.events.off(Phaser.Scenes.Events.CREATE, sync);
+      target.events.on(Phaser.Scenes.Events.CREATE, sync);
+    }
 
     createMenuMemoryBackground(this);
 
@@ -93,8 +119,7 @@ class MenuScene extends Phaser.Scene {
   }
 }
 
-// 把游戏放进 index.html 中的 game 区域
-document.getElementById('game')!.style.height = '100vh';
+// 把游戏放进 index.html 中的 game 区域（容器尺寸由 CSS 铺满视口，勿用 JS 设高度）
 
 new Phaser.Game({
   type: Phaser.AUTO,
