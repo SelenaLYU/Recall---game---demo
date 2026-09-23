@@ -106,6 +106,7 @@ new Phaser.Game({
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
+    autoRound: true, // CSS 位置取整，避免半像素模糊
   },
   render: { antialias: true, powerPreference: 'high-performance' },
   scene: [MenuScene, IntroScene, ForestScene, RoomScene, EndingScene],

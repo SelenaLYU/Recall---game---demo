@@ -109,6 +109,9 @@
 - 占位尺寸贴近最终预期（角色碰撞体 28×60），素材到位后换纹理少调数值。
 - 镜头：`startFollow(roundPixels=true, lerp≈0.1)` + `setDeadzone`，保证像素清晰、不抖。
 - **高清渲染**：渲染缓冲 = 逻辑分辨率 × min(devicePixelRatio, 2)（`src/systems/Resolution.ts`），每个场景 `create()` 必须调用 `applyHDCamera(this)`。**不要用 `scale.zoom`**——FIT 模式下不生效（实测 canvas.width 仍为 960）。scrollFactor≠1 或 scrollFactor 0 的装饰层与相机 zoom 组合易错位，新增背景层前先实机截图验证。
+- **屏幕适配**：`scale.autoRound: true`（CSS 位置取整防半像素模糊）；FIT 信箱区底色与游戏底色一致（`index.html` body `#15251f`）；窗口缩放由 ScaleManager 自动处理，无需手动监听。移动端触控仍在红线内，不做。
+- **全屏 scrollFactor 0 层**（雾/暗角/HUD）：实际视口 = 1920×1080（1:1 投影），画布纹理必须铺满该尺寸或 `setScale(HD_SCALE)`，否则只显示一角（深度雾曾踩坑）；HUD 统一放 `hudLayer`（scale = HD_SCALE）抵消缩小。
+- **加载与帧率**：森林 preload 带极简加载条（背景/音频数 MB，防止"点击后无响应"感）；全屏 sf0 层控制在 3 层内（背景+雾+暗角）控制 overdraw；Sfx 采样优先、合成回退（`playSample`）；其余实体数量小，无需对象池。
 - 纹理 key 命名：`char-yuyu-*`（角色帧）、`env-*`（环境）、`item-*`（物品），占位纹理以 `placeholder-` 开头，避免和正式素材冲突。
 
 ## 7. 素材缺口清单（B 按此补齐，到货一项勾一项并更新本节；具体任务见仓库 Issues）
