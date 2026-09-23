@@ -67,8 +67,24 @@ export class Terrain {
     }
   }
 
-  addSlope(def: SlopeDef): void {
-    const steps = Math.max(6, Math.ceil(def.drop / MAX_STEP_RISE));
+  /** 采样台阶坡：按坡面素材的崖沿曲线（世界坐标点列）生成一串隐藏台阶，
+   * 上升/下降每段 ≤16px；画面由场景把坡面素材铺在台阶角点连线上。 */
+  addStepSlope(points: Array<{ x: number; top: number }>, bottom: number): void {
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+      const width = Math.ceil(b.x - a.x) + 1;
+      const height = Math.max(8, bottom - a.top);
+      const rect = this.scene.add
+        .rectangle(a.x, a.top, width, height, COLORS.soilTop)
+        .setOrigin(0, 0)
+        .setVisible(false);
+      this.scene.physics.add.existing(rect, true);
+      this.solids.push(rect);
+    }
+  }
+
+  addSlope(def: SlopeDef): void {    const steps = Math.max(6, Math.ceil(def.drop / MAX_STEP_RISE));
     const stepWidth = def.width / steps;
     for (let i = 0; i < steps; i++) {
       const topY = def.y + (def.drop * i) / steps;
@@ -98,35 +114,9 @@ export class Terrain {
     }
   }
 
-  /** 厚地面：茉莉花篱笆顶面（B 贴图）+ 土层渐变 + 碎石 + 根系；无贴图时退回程序绘制 */
+  /** 厚地面：茉莉花篱笆贴图（B 资产）即整个画面——下面不再垫程序土层/碎石/根系
+   *（深色矩形与背景割裂，用户要求去掉）；无贴图时才退回程序绘制草皮。 */
   private drawGround(x: number, y: number, width: number, height: number): void {
-    const g = this.scene.add.graphics();
-    // 土层（草皮以下，从篱笆下缘开始）
-    g.fillGradientStyle(COLORS.soilTop, COLORS.soilTop, COLORS.soilDeep, COLORS.soilDeep, 1);
-    g.fillRect(x, y + 34, width, Math.max(6, height - 34));
-    // 碎石肌理
-    for (let ty = y + 52; ty < y + height - 10; ty += 30) {
-      for (let tx = x + 16 + ((ty * 13) % 22); tx < x + width - 10; tx += 27) {
-        const dark = (tx + ty) % 2 === 0;
-        g.fillStyle(dark ? COLORS.soilSpeckle : COLORS.soilSpeckleLight, 0.55);
-        g.fillCircle(tx, ty, dark ? 2.2 : 1.7);
-      }
-    }
-    // 根系：从顶面下垂的短根
-    g.lineStyle(2, COLORS.root, 0.75);
-    for (let rx = x + 40; rx < x + width - 20; rx += 88) {
-      const depth = 26 + ((rx * 11) % 22);
-      g.beginPath();
-      g.moveTo(rx, y + GRASS_LIP);
-      g.lineTo(rx + 3, y + GRASS_LIP + depth * 0.55);
-      g.lineTo(rx - 2, y + GRASS_LIP + depth);
-      g.strokePath();
-      g.beginPath();
-      g.moveTo(rx + 1, y + GRASS_LIP + depth * 0.4);
-      g.lineTo(rx + 10, y + GRASS_LIP + depth * 0.62);
-      g.strokePath();
-    }
-
     if (this.scene.textures.exists(TEXTURE.ground)) {
       // 茉莉花篱笆顶面：顶部高出碰撞线 8px，角色脚踩进花丛；TileSprite 平铺。
       // 缩放/色差按块微调，打散"同一花纹无限重复"的贴图感
@@ -140,37 +130,22 @@ export class Terrain {
       const edge = this.scene.add.graphics();
       edge.lineStyle(2, COLORS.grassEdge, 0.35);
       edge.lineBetween(x + 2, y + 1, x + width - 2, y + 1);
-    } else {
-      g.fillStyle(COLORS.grass, 1);
-      g.fillRect(x, y, width, GRASS_LIP);
-      g.fillStyle(COLORS.grassEdge, 1);
-      g.fillRect(x, y, width, 3);
-      g.fillStyle(COLORS.grassBlade, 1);
-      for (let tx = x + 14; tx < x + width - 8; tx += 54) {
-        const h = 5 + ((tx * 7) % 6);
-        g.fillTriangle(tx - 2, y + 3, tx + 2, y + 3, tx, y + 3 - h);
-      }
+      return;
+    }
+    const g = this.scene.add.graphics();
+    g.fillStyle(COLORS.grass, 1);
+    g.fillRect(x, y, width, GRASS_LIP);
+    g.fillStyle(COLORS.grassEdge, 1);
+    g.fillRect(x, y, width, 3);
+    g.fillStyle(COLORS.grassBlade, 1);
+    for (let tx = x + 14; tx < x + width - 8; tx += 54) {
+      const h = 5 + ((tx * 7) % 6);
+      g.fillTriangle(tx - 2, y + 3, tx + 2, y + 3, tx, y + 3 - h);
     }
   }
 
   /** 薄浮空平台：茉莉花板贴图（B）；无贴图时退回圆角草板 */
   private drawFloat(x: number, y: number, width: number, height: number): void {
-    // 板下的垂草与根须：打破"整齐矩形块"的轮廓，让花板像长出来的
-    const wisps = this.scene.add.graphics();
-    wisps.fillStyle(COLORS.grassBlade, 0.9);
-    for (let i = 0; i < Math.max(3, Math.round(width / 46)); i++) {
-      const wx = x + 12 + (((i * 61 + Math.round(x)) * 13) % Math.max(1, width - 24));
-      const len = 8 + (((i * 29 + Math.round(x)) % 9));
-      wisps.fillTriangle(wx - 2, y + 42, wx + 2, y + 42, wx, y + 42 + len);
-    }
-    wisps.lineStyle(2, COLORS.root, 0.7);
-    for (const sideX of [x + 6, x + width - 6]) {
-      wisps.beginPath();
-      wisps.moveTo(sideX, y + 44);
-      wisps.lineTo(sideX + (sideX < x + width / 2 ? -4 : 4), y + 56);
-      wisps.strokePath();
-    }
-
     if (this.scene.textures.exists(TEXTURE.float)) {
       // 花板略宽于碰撞体（两侧各探出 8px），顶面与碰撞线齐平；缩放/色差微调防重复
       const jitter = (((Math.round(x) * 11) % 5) - 2) / 1000;

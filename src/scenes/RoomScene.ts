@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { Sfx } from '../systems/Sfx';
 import { Effects } from '../gameplay/Effects';
-import { applyHDCamera, HD_SCALE } from '../systems/Resolution';
+import { applyHDCamera, bufferScaleOf } from '../systems/Resolution';
 import { showClockPuzzleUI } from '../ui/ClockPuzzleUI';
 import { createFragmentHud, type FragmentHudHandle } from '../ui/FragmentHud';
 import {
@@ -115,8 +115,12 @@ export default class RoomScene extends Phaser.Scene {
   private panel: Phaser.GameObjects.Container | null = null;
   private hintTimer?: Phaser.Time.TimerEvent;
   private hintFade?: Phaser.Tweens.Tween;
+  /** 拼图已解开（锁输入，播完成效果） */
+  private puzzleSolved = false;
   /** 石槽水面中心（playFishSwim 用） */
   private basinWater: { x: number; y: number } | null = null;
+  /** hudLayer 随渲染缓冲重缩放的处理器（场景关闭时解绑） */
+  private hudSyncHandler?: () => void;
   /** 记忆球/收音机打开时的动态灯（场景 shutdown 会清空 LightsManager，重启重建） */
   private orbLight?: Phaser.GameObjects.Light;
   private radioLight?: Phaser.GameObjects.Light;
@@ -159,6 +163,7 @@ export default class RoomScene extends Phaser.Scene {
     this.basinWater = null;
     this.orbLight = undefined;
     this.radioLight = undefined;
+    this.puzzleSolved = false;
 
     applyHDCamera(this);
 
@@ -355,7 +360,16 @@ export default class RoomScene extends Phaser.Scene {
     this.panel = layer;
 
     this.panelBackdrop(layer);
-    layer.add(this.panelTitle(480, 62, '把照片拼回原样'));
+    layer.add(this.panelTitle(480, 58, '把照片拼回原样'));
+    layer.add(
+      this.add
+        .text(480, 82, '拖动图块到任意格子换位 · 点一下可滑入旁边的空格', {
+          fontFamily: 'sans-serif',
+          fontSize: '13px',
+          color: '#cbb98a',
+        })
+        .setOrigin(0.5),
+    );
     this.addCloseButton(layer, 922, 34);
 
     const srcW = 96;
@@ -363,7 +377,7 @@ export default class RoomScene extends Phaser.Scene {
     const cellW = 144;
     const cellH = 96;
     const boardX = 480 - (cellW * 4) / 2;
-    const boardY = 92;
+    const boardY = 108;
 
     // cells[pos] = 该格子的图块编号（15 = 空格）；从完成态做随机空移保证可解
     const cells = Array.from({ length: 16 }, (_, i) => i);
@@ -383,8 +397,7 @@ export default class RoomScene extends Phaser.Scene {
       cells[pick] = 15;
     }
 
-    // 相框底板：暖纸底 + 木色描边 + 4×4 格线——照片的完整轮廓和格子一眼可读，
-    // 图块不再是"散在昏暗房间上的碎片"
+    // 相框底板：暖纸底 + 木色描边 + 4×4 格线——照片的完整轮廓和格子一眼可读
     const pad = 12;
     const plate = this.add.graphics();
     plate.fillStyle(0xf0e8d4, 1);
@@ -409,7 +422,7 @@ export default class RoomScene extends Phaser.Scene {
       return { x: boardX + c * cellW + cellW / 2, y: boardY + r * cellH + cellH / 2 };
     };
 
-    // 空位标记：暗格 + 细描边，随空格移动刷新——玩家始终看得出"缺口"在哪
+    // 空位标记：暗格 + 细描边，随空格移动刷新
     const blankMark = this.add.graphics();
     layer.add(blankMark);
     const drawBlank = () => {
@@ -422,50 +435,182 @@ export default class RoomScene extends Phaser.Scene {
     };
     drawBlank();
 
+    const checkSolved = () => {
+      if (cells.every((t, i) => t === i)) {
+        this.time.delayedCall(160, () => this.onPuzzleSolved(layer));
+      }
+    };
+    /** 把图块 t 移到 targetPos（与该格原有内容互换），刷新空格标记 */
+    const moveTo = (t: number, image: Phaser.GameObjects.Image, targetPos: number) => {
+      const at = cells.indexOf(t);
+      cells[at] = cells[targetPos];
+      cells[targetPos] = t;
+      blank = cells.indexOf(15);
+      drawBlank();
+      const dest = gridXY(targetPos);
+      this.tweens.killTweensOf(image); // 快速连拖时不让旧回弹 tween 抢位置
+      this.tweens.add({
+        targets: image,
+        x: dest.x,
+        y: dest.y,
+        duration: 110,
+        ease: 'Quad.easeOut',
+      });
+      this.sfx.step();
+      checkSolved();
+    };
+
     for (let pos = 0; pos < 16; pos++) {
       const tile = cells[pos];
       if (tile === 15) {
         continue;
       }
       const { c, r } = posOf(tile);
+      // 预切小图：不用 setCrop——裁剪图的输入热区不可靠（点一块会命中旁边块）
+      const tileKey = `photo-tile-${c}-${r}`;
+      if (!this.textures.exists(tileKey)) {
+        const source = this.textures.get('room-photo').getSourceImage() as
+          CanvasImageSource & { width: number; height: number };
+        const cnv = document.createElement('canvas');
+        cnv.width = srcW;
+        cnv.height = srcH;
+        cnv.getContext('2d')?.drawImage(source, c * srcW, r * srcH, srcW, srcH, 0, 0, srcW, srcH);
+        this.textures.addCanvas(tileKey, cnv);
+      }
       const img = this.add
-        .image(0, 0, 'room-photo')
-        .setCrop(c * srcW, r * srcH, srcW, srcH)
-        .setScale(1.5)
+        .image(0, 0, tileKey)
+        .setDisplaySize(cellW, cellH)
         .setInteractive({ useHandCursor: true });
       const { x, y } = gridXY(pos);
       img.setPosition(x, y);
       layer.add(img);
       tileImages.set(tile, img);
-      img.on('pointerdown', () => {
+
+      const slideIntoBlank = () => {
+        if (this.puzzleSolved) {
+          return;
+        }
         const at = cells.indexOf(tile);
-        if (this.adjacentPositions(blank).includes(at)) {
-          cells[blank] = tile;
-          cells[at] = 15;
-          blank = at;
-          drawBlank();
-          const target = gridXY(blank);
+        const b = cells.indexOf(15);
+        const adjacent =
+          (Math.floor(at / 4) === Math.floor(b / 4) && Math.abs((at % 4) - (b % 4)) === 1) ||
+          (at % 4 === b % 4 && Math.abs(Math.floor(at / 4) - Math.floor(b / 4)) === 1);
+        if (adjacent) {
+          moveTo(tile, img, b);
+        } else {
+          // 非相邻：轻微推移反馈（这格点不出滑动，但按下有响应）
+          this.tweens.killTweensOf(img);
+          this.tweens.add({ targets: img, x: img.x + 4, duration: 55, yoyo: true, repeat: 1 });
+        }
+      };
+
+      // 纯点击必须有独立处理：不移动指针时 Phaser 不发 drag 事件，
+      // 挂在 dragend 上的"点击分支"永远不执行（此前"点击没反应"的根因）
+      img.on('pointerup', () => {
+        if (movedWorld < 8) {
+          slideIntoBlank();
+        }
+      });
+
+      // 拖拽用 Phaser 原生 drag：**纯增量跟随**。实测 3.90 在 dragstart 里传的
+      // dragX/dragY 是 0（不是物件坐标），所以首 个 drag 事件只记基线不动块，
+      // 之后每帧按指针增量移动——对任何坐标系语义都免疫
+      this.input.setDraggable(img);
+      let prevDx: number | null = null;
+      let prevDy: number | null = null;
+      let movedWorld = 0;
+      img.on('dragstart', () => {
+        if (this.puzzleSolved) {
+          return;
+        }
+        prevDx = null;
+        prevDy = null;
+        movedWorld = 0;
+        layer.bringToTop(img);
+      });
+      img.on('drag', (_p: Phaser.Input.Pointer, dx: number, dy: number) => {
+        if (this.puzzleSolved) {
+          return;
+        }
+        if (prevDx === null || prevDy === null) {
+          prevDx = dx;
+          prevDy = dy;
+          return;
+        }
+        movedWorld += Math.abs(dx - prevDx) + Math.abs(dy - prevDy);
+        img.setPosition(img.x + (dx - prevDx), img.y + (dy - prevDy));
+        prevDx = dx;
+        prevDy = dy;
+      });
+      img.on('dragend', () => {
+        if (this.puzzleSolved || movedWorld < 8) {
+          return; // 纯点击已由 pointerup 处理
+        }
+        const col = Phaser.Math.Clamp(Math.round((img.x - boardX - cellW / 2) / cellW), 0, 3);
+        const row = Phaser.Math.Clamp(Math.round((img.y - boardY - cellH / 2) / cellH), 0, 3);
+        const target = row * 4 + col;
+        const at = cells.indexOf(tile);
+        if (target === at) {
+          const back = gridXY(at);
+          this.tweens.killTweensOf(img);
+          this.tweens.add({ targets: img, x: back.x, y: back.y, duration: 90, ease: 'Quad.easeOut' });
+          return;
+        }
+        const other = cells[target];
+        const otherImg = other !== 15 ? tileImages.get(other) : undefined;
+        moveTo(tile, img, target);
+        if (otherImg) {
+          const back = gridXY(at);
+          this.tweens.killTweensOf(otherImg);
           this.tweens.add({
-            targets: img,
-            x: target.x,
-            y: target.y,
-            duration: 110,
+            targets: otherImg,
+            x: back.x,
+            y: back.y,
+            duration: 90,
             ease: 'Quad.easeOut',
           });
-          this.sfx.step();
-          if (cells.every((t, i) => t === i)) {
-            this.time.delayedCall(160, () => this.onPuzzleSolved(layer));
-          }
         }
       });
     }
   }
 
   private onPuzzleSolved(layer: Phaser.GameObjects.Container): void {
-    this.closePanel();
-    this.cameras.main.flash(140, 230, 207, 151);
-    this.gainFragment('photo');
-    this.openDomPanel(() => showPhotoMemoryText(this, photoFrameUrl));
+    if (this.puzzleSolved) {
+      return;
+    }
+    this.puzzleSolved = true;
+    // 完成效果：完整照片淡入合拢 → 金光扫过 + 光环 → 停一拍再收起进文字面板
+    const boardX = 480 - 144 * 2;
+    const boardY = 108;
+    const full = this.add
+      .image(480, boardY + 192, 'room-photo')
+      .setDisplaySize(576, 384)
+      .setAlpha(0);
+    layer.add(full);
+    this.tweens.add({ targets: full, alpha: 1, duration: 320, ease: 'Quad.easeOut' });
+
+    const sweep = this.add
+      .rectangle(0, boardY + 192, 64, 400, 0xfff2cc, 0.32)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    layer.add(sweep);
+    this.tweens.add({
+      targets: sweep,
+      x: boardX + 640,
+      duration: 650,
+      delay: 240,
+      ease: 'Quad.easeInOut',
+      onComplete: () => sweep.destroy(),
+    });
+    Effects.ring(this, 480, boardY + 192);
+    this.time.delayedCall(1150, () => {
+      if (this.panel !== layer) {
+        return; // 演出期间面板被关掉：不发碎片
+      }
+      this.closePanel();
+      this.cameras.main.flash(140, 230, 207, 151);
+      this.gainFragment('photo');
+      this.openDomPanel(() => showPhotoMemoryText(this, photoFrameUrl));
+    });
   }
 
   private adjacentPositions(pos: number): number[] {
@@ -646,12 +791,23 @@ export default class RoomScene extends Phaser.Scene {
       .container(0, 0)
       .setScrollFactor(0)
       .setDepth(210)
-      .setScale(HD_SCALE);
+      .setScale(bufferScaleOf(this));
+    // HUD 是 scrollFactor 0 层（世界单位 = 缓冲像素），渲染缓冲随窗口变化时跟着缩放
+    this.scale.off(Phaser.Scale.Events.RESIZE, this.hudSyncHandler);
+    this.hudSyncHandler = () => this.hudLayer.setScale(bufferScaleOf(this));
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.hudSyncHandler);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      if (this.hudSyncHandler) {
+        this.scale.off(Phaser.Scale.Events.RESIZE, this.hudSyncHandler);
+      }
+      this.hudSyncHandler = undefined;
+    });
     this.hintText = this.add.text(16, 14, '', {
       fontFamily: 'sans-serif',
       fontSize: '15px',
       color: '#f4f9f2',
-      backgroundColor: 'rgba(6, 14, 10, 0.62)',
+      // 与森林提示同款深色底牌，任何背景上可读
+      backgroundColor: 'rgba(9, 20, 15, 0.8)',
       padding: { x: 10, y: 6 },
     });
     this.hudLayer.add(this.hintText);

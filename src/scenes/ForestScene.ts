@@ -3,7 +3,7 @@ import { Player } from '../gameplay/Player';
 import { Terrain } from '../gameplay/Terrain';
 import { Effects } from '../gameplay/Effects';
 import { Sfx } from '../systems/Sfx';
-import { applyHDCamera, HD_SCALE } from '../systems/Resolution';
+import { applyHDCamera, bufferScaleOf, screenRefScaleOf } from '../systems/Resolution';
 import { showForestLoadingUI } from '../ui/ForestLoadingUI';
 import { Vine } from '../gameplay/Vine';
 import { Flower } from '../gameplay/Flower';
@@ -11,6 +11,8 @@ import { Flower } from '../gameplay/Flower';
 const WORLD_WIDTH = 2880;
 const WORLD_HEIGHT = 640;
 const GROUND_TOP = 560;
+/** 开场出生高台的顶面（花坡起点） */
+const PLATEAU_TOP = 386;
 /** 掉出地图判定线（世界下界之外） */
 const KILL_Y = 800;
 /** 弹跳花的弹起速度 */
@@ -26,8 +28,6 @@ export default class ForestScene extends Phaser.Scene {
   private flowers: Flower[] = [];
   private lastFlower: Flower | null = null;
 
-  private medicineVisual!: Phaser.GameObjects.Container;
-  private medicineZone!: Phaser.GameObjects.Zone;
   private keyVisual!: Phaser.GameObjects.Container;
   private keyZone!: Phaser.GameObjects.Zone;
   private doorVisual!: Phaser.GameObjects.Container;
@@ -35,12 +35,10 @@ export default class ForestScene extends Phaser.Scene {
   private doorGlow!: Phaser.GameObjects.Ellipse;
   private hintText!: Phaser.GameObjects.Text;
   private hudKey!: Phaser.GameObjects.Container;
-  private hudHerb!: Phaser.GameObjects.Container;
   private forestMusic?: Phaser.Sound.BaseSound;
   private forestMusicUnlock?: () => void;
 
   private hasKey = false;
-  private hasMedicine = false;
   private doorEntered = false;
   private restarting = false;
   private hintOverrideUntil = 0;
@@ -88,6 +86,7 @@ export default class ForestScene extends Phaser.Scene {
     this.load.image('item-golden-key', 'assets/environment/item-golden-jasmine-key-192x256.png');
     this.load.image('env-giant-jasmine-plant', 'assets/environment/env-giant-jasmine-plant-256x384.png');
     this.load.image('env-tree-watercolor', 'assets/environment/env-tree-watercolor-256x320.png');
+    this.load.image('env-flower-slope', 'assets/environment/env-flower-slope-transparent-1920x1080.png');
     this.load.audio('sfx-footstep', 'assets/audio/sfx-footstep.m4a');
     this.load.audio('sfx-jump', 'assets/audio/sfx-jump.wav');
     this.load.audio('forest-bgm', 'assets/audio/forest-bgm.mp3');
@@ -128,7 +127,6 @@ export default class ForestScene extends Phaser.Scene {
     // 场景实例在重玩时会被复用，属性初始化器不会重新执行：
     // 所有玩法状态必须在这里重置（AGENTS.md 第 5 节），否则重玩卡死
     this.hasKey = false;
-    this.hasMedicine = false;
     this.doorEntered = false;
     this.restarting = false;
     this.hintOverrideUntil = 0;
@@ -160,6 +158,7 @@ export default class ForestScene extends Phaser.Scene {
     this.buildHud();
     this.buildItemHud();
     this.buildVignette();
+    this.registerScreenLayerSync();
     Effects.fireflies(this, WORLD_WIDTH, 16);
 
     this.cameras.main.fadeIn(250, 23, 56, 43);
@@ -181,11 +180,11 @@ export default class ForestScene extends Phaser.Scene {
 
   /** 天空渐变：上亮下暗，压住画面底色 */
   private buildSky(): void {
-    const sky = this.add.graphics().setScrollFactor(0).setDepth(-10);
-    sky.fillGradientStyle(0x24503c, 0x24503c, 0x17382b, 0x17382b, 1);
-    sky.fillRect(0, 0, 960, 540);
-    sky.fillStyle(0x2d5a44, 0.3);
-    sky.fillRect(0, 0, 960, 80);
+    this.sfSky = this.add.graphics().setScrollFactor(0).setDepth(-10);
+    this.sfSky.fillGradientStyle(0x24503c, 0x24503c, 0x17382b, 0x17382b, 1);
+    this.sfSky.fillRect(0, 0, 960, 540);
+    this.sfSky.fillStyle(0x2d5a44, 0.3);
+    this.sfSky.fillRect(0, 0, 960, 80);
   }
 
   /**
@@ -194,14 +193,14 @@ export default class ForestScene extends Phaser.Scene {
    * （原雾/灌木视差层与 zoom 组合会错位，已移除；深度感由背景图与树/萤火虫承担。）
    */
   private buildArtBackdrop(): void {
-    this.add
+    this.sfBackdrop = this.add
       .image(0, 0, 'env-forest-bg')
       .setOrigin(0, 0)
-      .setScale(1.02)
       .setScrollFactor(0)
       .setDepth(-9)
-      // 再退暗退饱和：背景是"远景空气"，亮度和锐度都要低于角色与落脚面（视觉样板第一步）
+      // 轻微降饱和压亮度，让花海退到“远景”，前景路线/角色成为主次（配合深度雾）
       .setTint(0xb9c6bc);
+    this.sfBackdrop.setScale(1.02 * screenRefScaleOf(this));
   }
 
   /** 世界层装饰树（无碰撞，位于角色身后） */
@@ -255,14 +254,44 @@ export default class ForestScene extends Phaser.Scene {
         texture.refresh();
       }
     }
-    this.add.image(960, 540, 'screen-vignette').setScrollFactor(0).setDepth(95);
+    this.sfVignette = this.add
+      .image(960, 540, 'screen-vignette')
+      .setScrollFactor(0)
+      .setDepth(95)
+      .setScale(screenRefScaleOf(this));
+  }
+
+  /**
+   * 全屏 sf0 层随渲染缓冲重缩放：sf0 层世界单位 = 缓冲像素（zoom 不作用于它们），
+   * 缓冲随窗口变化（main.ts syncRenderBuffer）时这些层必须跟着缩放，
+   * 否则只盖住一角或溢出。场景关闭时解绑，防重玩叠加。
+   */
+  private registerScreenLayerSync(): void {
+    const sync = () => {
+      const zoom = bufferScaleOf(this);
+      const ref = screenRefScaleOf(this);
+      this.sfSky.setScale(zoom); // 内容 960×540 → 铺满缓冲
+      this.sfFog.setScale(zoom); // 内容 960×540
+      this.sfBackdrop.setScale(1.02 * ref); // 内容 1920×1080
+      this.sfVignette.setScale(ref); // 内容 1920×1080
+      this.hudLayer.setScale(zoom); // HUD 按 960 逻辑排布
+    };
+    sync();
+    this.scale.off(Phaser.Scale.Events.RESIZE, this.syncLayersHandler);
+    this.syncLayersHandler = sync;
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.syncLayersHandler);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      if (this.syncLayersHandler) {
+        this.scale.off(Phaser.Scale.Events.RESIZE, this.syncLayersHandler);
+      }
+      this.syncLayersHandler = undefined;
+    });
   }
 
   /**
    * 深度雾：把背景花海下半部压暗成远景，解决"背景像可行走地面"的混淆。
-   * 关键：scrollFactor 0 的层按世界尺寸 1:1 投进渲染缓冲（zoom 不作用于它），
-   * 高清相机视口是 1920×1080，雾图必须 setScale(HD_SCALE) 铺满全屏，
-   * 否则只盖住左上四分之一、露出笔直的雾层边缘（此前实测踩坑）。
+   * 关键：scrollFactor 0 的层世界单位 1:1 投进渲染缓冲（zoom 不作用于它），
+   * 雾画布 960×540，必须 setScale(缓冲倍率) 铺满全屏，否则只盖住一角。
    */
   private buildDepthFog(): void {
     if (!this.textures.exists('depth-fog')) {
@@ -278,11 +307,11 @@ export default class ForestScene extends Phaser.Scene {
         texture.refresh();
       }
     }
-    this.add
+    this.sfFog = this.add
       .image(480, 270, 'depth-fog')
       .setScrollFactor(0)
       .setDepth(-8)
-      .setScale(HD_SCALE);
+      .setScale(bufferScaleOf(this));
   }
 
   /** 藤蔓谷上方的横枝：B 的茉莉花枝贴图（锚点挂在其上；无贴图时退回程序绘制） */
@@ -313,6 +342,36 @@ export default class ForestScene extends Phaser.Scene {
   private buildTerrain(): void {
     this.terrain = new Terrain(this);
     this.terrain.addPlatform({ x: 0, y: GROUND_TOP, width: 820, height: 80 });
+    // 开场花坡：出生高台（顶 386）→ 沿花坡素材崖沿曲线下行到主地面。
+    // 台阶按素材实测崖沿采样（每段 ≤13px），视觉用崖沿贴图而非直线草带
+    const RIDGE: Array<[number, number]> = [
+      [0, 323], [50, 334], [100, 336], [150, 341], [200, 342], [250, 357], [300, 363],
+      [350, 363], [400, 380], [450, 397], [500, 413], [550, 430], [600, 455], [650, 486],
+      [700, 515], [750, 544], [800, 573], [850, 598], [900, 616], [950, 641], [1000, 660],
+      [1050, 687], [1100, 705], [1150, 719], [1200, 736], [1250, 737], [1300, 745],
+      [1350, 750], [1400, 759],
+    ];
+    const SLOPE_X0 = 150;
+    const SLOPE_SCALE = 0.4;
+    const RIDGE_Y0 = 323;
+    this.terrain.addPlatform({ x: 0, y: PLATEAU_TOP, width: SLOPE_X0, height: GROUND_TOP - PLATEAU_TOP + 80 });
+    this.terrain.addStepSlope(
+      RIDGE.map(([sx, sy]) => ({
+        x: SLOPE_X0 + sx * SLOPE_SCALE,
+        top: PLATEAU_TOP + (sy - RIDGE_Y0) * SLOPE_SCALE,
+      })),
+      GROUND_TOP + 80,
+    );
+    if (this.textures.exists('env-flower-slope')) {
+      this.add
+        .image(SLOPE_X0, PLATEAU_TOP - RIDGE_Y0 * SLOPE_SCALE, 'env-flower-slope')
+        .setOrigin(0, 0)
+        .setScale(SLOPE_SCALE)
+        // 崖沿实际止于素材 x≈1409；右侧还有一道极淡的横向水彩残痕，
+        // 缩放后悬在谷隙上方像"辅助线"——裁掉（2026-09-23 实测定位）
+        .setCrop(0, 0, 1410, 1080)
+        .setDepth(0);
+    }
     this.terrain.addPlatform({ x: 580, y: 480, width: 100, height: 24, kind: 'float' });
     this.terrain.addPlatform({ x: 750, y: 440, width: 110, height: 24, kind: 'float' });
     // 第一根藤蔓下的练习落脚台：抓取失误不致死，可跳回左侧重试
@@ -338,7 +397,7 @@ export default class ForestScene extends Phaser.Scene {
 
   private buildPlayer(): void {
     this.sfx = new Sfx(this);
-    this.player = new Player(this, { x: 120, y: 500, sfx: this.sfx });
+    this.player = new Player(this, { x: 75, y: PLATEAU_TOP - 30, sfx: this.sfx });
     this.physics.add.collider(this.player.view, this.terrain.solids);
   }
 
@@ -350,34 +409,13 @@ export default class ForestScene extends Phaser.Scene {
   }
 
   private buildItems(): void {
-    // 药（叙事收集品，高台左侧）
-    this.medicineVisual = this.add.container(2170, 185).setDepth(6);
-    const herbGlow = this.add.ellipse(0, 0, 54, 54, GOLD, 0.16);
-    const bottle = this.add
-      .rectangle(0, 0, 16, 22, 0xf2efe4)
-      .setStrokeStyle(2, 0x8a6d3b, 0.9);
-    const liquid = this.add.rectangle(0, 4, 10, 12, GOLD);
-    const neck = this.add.rectangle(0, -14, 6, 6, 0x8a6d3b);
-    this.medicineVisual.add([herbGlow, bottle, liquid, neck]);
-    this.tweens.add({
-      targets: this.medicineVisual,
-      y: 175,
-      duration: 1300,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-    this.medicineZone = this.add.zone(2170, 185, 56, 64);
-    this.physics.add.existing(this.medicineZone, true);
-    this.physics.add.overlap(this.player.view, this.medicineZone, () => this.collectMedicine());
-
-    // 钥匙（高台右侧）
+    // 钥匙（高台右侧）：放大一档、缓慢摇曳，像挂在风里的信物
     const keyX = 2290;
     const keyY = 185;
     this.keyVisual = this.add.container(keyX, keyY).setDepth(6);
-    const glow = this.add.ellipse(0, 0, 64, 64, GOLD, 0.18);
+    const glow = this.add.ellipse(0, 0, 78, 78, GOLD, 0.2);
     const keyDisplay: Phaser.GameObjects.GameObject = this.textures.exists('item-golden-key')
-      ? this.add.image(0, 0, 'item-golden-key').setScale(0.28)
+      ? this.add.image(0, 0, 'item-golden-key').setScale(0.36)
       : (() => {
           const keyGraphic = this.add.graphics();
           keyGraphic.lineStyle(4, GOLD, 1);
@@ -403,6 +441,14 @@ export default class ForestScene extends Phaser.Scene {
       targets: this.keyVisual,
       y: keyY - 10,
       duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+    this.tweens.add({
+      targets: this.keyVisual,
+      angle: { from: -7, to: 7 },
+      duration: 1700,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
@@ -451,35 +497,35 @@ export default class ForestScene extends Phaser.Scene {
     cam.followOffset.x += (targetX - cam.followOffset.x) * Math.min(1, delta * 0.004);
   }
 
-  /** HUD 层：scrollFactor 0 + 按 HD_SCALE 放大，抵消相机 zoom 对 HUD 造成的缩小 */
+  /** HUD 层：scrollFactor 0 + 按缓冲倍率放大，抵消相机 zoom 对 HUD 造成的缩小 */
   private hudLayer!: Phaser.GameObjects.Container;
+  /** 全屏 sf0 层（天空/背景/雾/暗角）：渲染缓冲随窗口变化时统一重缩放 */
+  private sfSky!: Phaser.GameObjects.Graphics;
+  private sfBackdrop!: Phaser.GameObjects.Image;
+  private sfFog!: Phaser.GameObjects.Image;
+  private sfVignette!: Phaser.GameObjects.Image;
+  private syncLayersHandler?: () => void;
 
   private buildHud(): void {
     this.hudLayer = this.add
       .container(0, 0)
       .setScrollFactor(0)
       .setDepth(100)
-      .setScale(HD_SCALE);
+      .setScale(bufferScaleOf(this));
     this.hintText = this.add.text(16, 14, '', {
       fontFamily: 'sans-serif',
       fontSize: '15px',
       color: '#f4f9f2',
-      backgroundColor: 'rgba(6, 14, 10, 0.62)',
+      // 深色底牌保证任何背景上可读；按键统一「」键帽写法
+      backgroundColor: 'rgba(9, 20, 15, 0.8)',
       padding: { x: 10, y: 6 },
     });
     this.hudLayer.add(this.hintText);
   }
 
-  /** 右上角已获得物品图标（钥匙 / 药） */
+  /** 右上角已获得物品图标（钥匙） */
   private buildItemHud(): void {
-    this.hudHerb = this.add.container(904, 28).setVisible(false);
-    this.hudHerb.add([
-      this.add.rectangle(0, 0, 10, 16, 0xf2efe4).setStrokeStyle(1.5, 0x8a6d3b, 0.9),
-      this.add.rectangle(0, 3, 6, 8, GOLD),
-      this.add.rectangle(0, -10, 5, 5, 0x8a6d3b),
-    ]);
-
-    this.hudKey = this.add.container(932, 28).setVisible(false);
+    this.hudKey = this.add.container(920, 28).setVisible(false);
     const keyIcon = this.add.graphics();
     keyIcon.lineStyle(3, GOLD, 1);
     keyIcon.strokeCircle(-3, -4, 4);
@@ -487,7 +533,7 @@ export default class ForestScene extends Phaser.Scene {
     keyIcon.fillRect(-1, -1, 2, 9);
     keyIcon.fillRect(1, 4, 4, 2);
     this.hudKey.add([keyIcon]);
-    this.hudLayer.add([this.hudHerb, this.hudKey]);
+    this.hudLayer.add(this.hudKey);
   }
 
   private showHint(message: string): void {
@@ -518,9 +564,9 @@ export default class ForestScene extends Phaser.Scene {
     if (this.hasKey) {
       message = '跳下高台 · 找花门离开';
     } else if (x < 860) {
-      message = 'A/D 移动 · 空格跳（空中可再跳）';
+      message = '「A / D」移动　「空格」跳（空中可再跳）';
     } else if (x < 1500) {
-      message = '抓住花环 · A/D 摆荡 · 空格甩出';
+      message = '抓住花环　「A / D」摆荡　「空格」甩出';
     } else {
       message = '踩大花前进 · 第三朵会高弹';
     }
@@ -547,12 +593,10 @@ export default class ForestScene extends Phaser.Scene {
       if (onFlower.bouncy) {
         body.setVelocityY(FLOWER_BOUNCE);
         this.sfx.bounce();
-        Effects.dust(this, onFlower.x, onFlower.top, 8, 30);
         // 关键瞬间光：弹起时一圈淡粉光环（有来源的动态光，见 AGENTS.md 光影约定）
         Effects.ring(this, onFlower.x, onFlower.top, 0xf3c2d8);
-      } else {
-        Effects.dust(this, onFlower.x, onFlower.top, 4, 18);
       }
+      // 白色尘土已按要求移除（静态花无反应，弹跳花只留光环）
     }
     this.lastFlower = onFlower;
   }
@@ -610,20 +654,6 @@ export default class ForestScene extends Phaser.Scene {
     this.cameras.main.once('camerafadeoutcomplete', () => this.scene.restart());
   }
 
-  private collectMedicine(): void {
-    if (this.hasMedicine) {
-      return;
-    }
-    this.hasMedicine = true;
-    this.sfx.collect();
-    Effects.sparkBurst(this, this.medicineVisual.x, this.medicineVisual.y, 10);
-    this.tweens.killTweensOf(this.medicineVisual);
-    this.medicineVisual.destroy();
-    this.medicineZone.destroy();
-    this.revealHudIcon(this.hudHerb);
-    this.showHint('拿到了药');
-  }
-
   private collectKey(): void {
     if (this.hasKey) {
       return;
@@ -639,14 +669,17 @@ export default class ForestScene extends Phaser.Scene {
     this.revealHudIcon(this.hudKey);
     this.showHint('拿到了钥匙，下方出现了门');
 
-    this.doorVisual.setVisible(true).setAlpha(0).setScale(0.6, 0.8);
+    // 门出现：从地里“长”出来——下移 16px 起步、Back 回弹归位，基座扬尘 + 光环
+    this.doorVisual.setVisible(true).setAlpha(0).setScale(0.6, 0.8).setY(GROUND_TOP + 16);
     this.sfx.door();
     Effects.ring(this, 2620, GROUND_TOP - 58);
+    Effects.dust(this, 2620, GROUND_TOP - 6, 10, 26);
     this.tweens.add({
       targets: this.doorVisual,
       alpha: 1,
       scaleX: 1,
       scaleY: 1,
+      y: GROUND_TOP,
       duration: 600,
       ease: 'Back.easeOut',
       onComplete: () => {
