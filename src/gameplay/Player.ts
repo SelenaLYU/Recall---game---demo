@@ -67,6 +67,24 @@ export class Player {
   state: PlayerState = 'idle';
   facing: -1 | 1 = 1;
 
+  // —— 触摸输入（手机版屏幕按钮写入，桌面恒为默认值）——
+  private touchMove = 0;
+  private touchJumpHeld = false;
+  private touchJumpQueued = false;
+
+  /** 触摸方向键按下/抬起（-1 左、0 松、1 右） */
+  setTouchMove(dir: -1 | 0 | 1): void {
+    this.touchMove = dir;
+  }
+
+  /** 触摸跳跃键按下（走与键盘相同的跳跃缓冲通路，二段跳同样生效） */
+  pressTouchJump(held: boolean): void {
+    if (held && !this.touchJumpHeld) {
+      this.touchJumpQueued = true;
+    }
+    this.touchJumpHeld = held;
+  }
+
   // —— 移动模型常量（调手感改这里）——
   /** 地面/空中加速 px/s² */
   private static readonly ACCEL_GROUND = 2600;
@@ -210,11 +228,16 @@ export class Player {
     const onGround = this.body.onFloor();
     const left = this.isDown('A') || this.isDown('LEFT');
     const right = this.isDown('D') || this.isDown('RIGHT');
-    const jumpHeld = this.isDown('SPACE') || this.isDown('W') || this.isDown('UP');
+    const jumpHeld =
+      this.isDown('SPACE') || this.isDown('W') || this.isDown('UP') || this.touchJumpHeld;
     const jumpPressed =
-      this.justPressed('SPACE') || this.justPressed('W') || this.justPressed('UP');
+      this.justPressed('SPACE') ||
+      this.justPressed('W') ||
+      this.justPressed('UP') ||
+      this.touchJumpQueued;
     const jumpReleased =
-      this.justReleased('SPACE') || this.justReleased('W') || this.justReleased('UP');
+      (!this.isDown('SPACE') && !this.isDown('W') && !this.isDown('UP') && !this.touchJumpHeld) &&
+      (this.justReleased('SPACE') || this.justReleased('W') || this.justReleased('UP'));
 
     // 土狼时间 + 跳跃缓冲（Celeste “& Forgiveness” 同款宽容技巧）
     if (onGround) {
@@ -224,6 +247,7 @@ export class Player {
     this.jumpBufferTimer = jumpPressed
       ? this.opts.jumpBufferMs
       : Math.max(0, this.jumpBufferTimer - delta);
+    this.touchJumpQueued = false;
 
     if (this.jumpBufferTimer > 0 && this.coyoteTimer > 0) {
       this.body.setVelocityY(this.opts.jumpVelocity);
@@ -277,6 +301,10 @@ export class Player {
       }
     } else {
       inputDir = (right ? 1 : 0) - (left ? 1 : 0);
+      // 触摸按钮（手机版）：键盘无输入时采用屏幕方向键
+      if (inputDir === 0 && this.touchMove !== 0) {
+        inputDir = this.touchMove;
+      }
     }
     let vx = this.body.velocity.x;
     if (inputDir !== 0) {
