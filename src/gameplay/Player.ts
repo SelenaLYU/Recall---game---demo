@@ -100,6 +100,14 @@ export class Player {
   private skidDustAt = 0;
   private displayedFacing: -1 | 1 = 1;
   private currentAnim = '';
+  /** 地面动画滞回：避免减速经过阈值时 run/idle 高频互切（“频繁动作切换”修复） */
+  private groundAnim: 'yuyu-idle' | 'yuyu-run' = 'yuyu-idle';
+  private groundAnimSince = 0;
+  /** 空中动画死区：顶点附近 vy≈0 时保持上一状态，避免 jump/fall 抖动 */
+  private airAnim: 'yuyu-jump' | 'yuyu-fall' = 'yuyu-jump';
+  /** 自动走位目标（房间点击物件后走近），到达即回调 */
+  private autoWalkTarget: number | null = null;
+  private autoWalkDone: (() => void) | null = null;
   /** 本次起跳的初速度，用于把跳跃序列帧按速度进度映射 */
   private jumpLaunchVy = -620;
   /** 空中可用的二段跳次数（落地恢复） */
@@ -205,12 +213,14 @@ export class Player {
       this.opts.sfx?.doubleJump();
       this.squash(0.9, 1.12);
       Effects.ring(this.scene, this.view.x, this.view.y + this.opts.height / 2 - 6, 0xd8e8d0);
+      // 翻滚 tween 挂在 sprite（而非 view）：避免被 squash 的 killTweensOf(view)
+      // 中途杀掉、停在半途角度造成“卡死”在倾斜姿势（实测修复）
       this.scene.tweens.add({
-        targets: this.view,
+        targets: this.sprite,
         angle: this.facing * 360,
         duration: 280,
         ease: 'Quad.easeOut',
-        onComplete: () => this.view.setRotation(0),
+        onComplete: () => this.sprite.setRotation(0),
       });
     }
 
@@ -230,8 +240,23 @@ export class Player {
       this.body.setVelocityY(this.body.velocity.y * 0.45);
     }
 
-    // 加速度/摩擦移动模型：起步加速、松键滑停、急转搓地，替代瞬变速度的僵硬感
-    const inputDir = (right ? 1 : 0) - (left ? 1 : 0);
+    // 加速度/摩擦移动模型：起步加速、松键滑停、急转搓地；自动走位优先于键盘
+    let inputDir: number;
+    if (this.autoWalkTarget !== null) {
+      const dx = this.autoWalkTarget - this.view.x;
+      if (Math.abs(dx) <= 8) {
+        this.autoWalkTarget = null;
+        const arrived = this.autoWalkDone;
+        this.autoWalkDone = null;
+        this.body.setVelocityX(0);
+        inputDir = 0;
+        arrived?.();
+      } else {
+        inputDir = Math.sign(dx);
+      }
+    } else {
+      inputDir = (right ? 1 : 0) - (left ? 1 : 0);
+    }
     let vx = this.body.velocity.x;
     if (inputDir !== 0) {
       const turning = Math.sign(inputDir) !== Math.sign(vx) && Math.abs(vx) > 120;
@@ -294,12 +319,29 @@ export class Player {
   /** 进入门/演出时锁住角色：不响应输入、不受重力 */
   freeze(): void {
     this.frozen = true;
+    this.cancelAutoWalk();
     this.attachedVine?.startCooldown(0);
     this.attachedVine = null;
     this.body.enable = true;
     this.body.setAllowGravity(false);
     this.body.setGravityY(0);
     this.body.setVelocity(0, 0);
+  }
+
+  /** 解除锁定（房间交互面板关闭后恢复走动） */
+  unfreeze(): void {
+    this.frozen = false;
+  }
+
+  /** 自动走位到目标 x（房间点击物件自动走近），到达后回调一次 */
+  autoWalkTo(x: number, onArrived?: () => void): void {
+    this.autoWalkTarget = Phaser.Math.Clamp(x, 20, 940);
+    this.autoWalkDone = onArrived ?? null;
+  }
+
+  cancelAutoWalk(): void {
+    this.autoWalkTarget = null;
+    this.autoWalkDone = null;
   }
 
   get attached(): Vine | null {
@@ -416,7 +458,7 @@ export class Player {
     });
   }
 
-  /** 状态 → 动画：地面用循环动画，空中按速度进度逐帧取帧（跳跃/下落与运动同步） */
+  /** 状态 → 动画：地面循环动画用滞回+最小停留防抖；空中用速度死区防抖后逐帧取帧 */
   private animate(delta: number, onGround: boolean): void {
     this.shadow.setAlpha(onGround ? 0.28 : 0.12);
     const speedRatio =
@@ -424,24 +466,38 @@ export class Player {
 
     if (!onGround) {
       const vy = this.body.velocity.y;
-      if (vy < 0) {
-        // 上升：从起跳帧推进到顶点帧，进度 = 已消化的初速度比例
+      if (vy < -25) {
+        this.airAnim = 'yuyu-jump';
+      } else if (vy > 25) {
+        this.airAnim = 'yuyu-fall';
+      }
+      if (this.airAnim === 'yuyu-jump') {
         const p = Phaser.Math.Clamp((vy - this.jumpLaunchVy) / -this.jumpLaunchVy, 0, 1);
         this.setAirFrame('char-yuyu-jump', p);
       } else {
-        // 下落：按落速推进，速度越快帧越后倾
         const p = Phaser.Math.Clamp(vy / 700, 0, 1);
         this.setAirFrame('char-yuyu-fall', p);
       }
       this.stepTimer = 0;
-    } else if (speedRatio > 0.05) {
-      this.playAnim('yuyu-run');
-      this.stepTimer -= delta;
-      if (this.stepTimer <= 0) {
-        this.stepTimer = Player.STEP_INTERVAL_MS;
-        this.opts.sfx?.step();
+    } else if (speedRatio > 0.05 || this.groundAnim === 'yuyu-run') {
+      // 滞回：进入跑需 >0.12，退出跑需 <0.05，且至少停留 90ms，防高频互切
+      const wantRun = this.groundAnim === 'yuyu-run' ? speedRatio > 0.05 : speedRatio > 0.12;
+      if (wantRun !== (this.groundAnim === 'yuyu-run') && this.scene.time.now - this.groundAnimSince > 90) {
+        this.groundAnim = wantRun ? 'yuyu-run' : 'yuyu-idle';
+        this.groundAnimSince = this.scene.time.now;
+      }
+      this.playAnim(this.groundAnim);
+      if (this.groundAnim === 'yuyu-run') {
+        this.stepTimer -= delta;
+        if (this.stepTimer <= 0) {
+          this.stepTimer = Player.STEP_INTERVAL_MS;
+          this.opts.sfx?.step();
+        }
+      } else {
+        this.stepTimer = 0;
       }
     } else {
+      this.groundAnim = 'yuyu-idle';
       this.playAnim('yuyu-idle');
       this.stepTimer = 0;
     }
