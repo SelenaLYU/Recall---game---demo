@@ -29,7 +29,7 @@
 | 负责人 | 路径 | 内容 |
 | --- | --- | --- |
 | C | `src/scenes/ForestScene.ts`、`src/scenes/RoomScene.ts`、`src/gameplay/**`、`src/systems/Sfx.ts` | 森林/房间玩法、引擎模块、程序化音效 |
-| D | `src/main.ts`、`src/MenuRoomMusic.ts`、`src/scenes/EndingScene.ts`、场景登记 | 启动配置、开场/结尾、菜单及房间配乐衔接 |
+| D | `src/main.ts`、`src/MenuMemoryBackground.ts`、`src/MenuRoomMusic.ts`、`src/scenes/IntroScene.ts`、`src/scenes/EndingScene.ts`、场景登记 | 启动配置、开场/结尾、菜单及房间配乐衔接 |
 | A | `src/ui/**` | UI 组件 |
 | B | `assets/**` | 素材 |
 
@@ -65,6 +65,11 @@
 - 音频在首次用户手势后才解锁（浏览器策略）；解锁前静默跳过，不报错。
 
 ### 场景契约
+
+- 开场动画原声：assets/audio/intro-voice.wav 从开场 MP4 提取，33 秒、PCM 双声道；IntroScene 完整预加载视频和原声后，通过 Phaser Sound 自动播放原声，视频自身静音。正常播放期间不轮询、不 seek、不重启音频；只在实际暂停、持续缓冲、恢复、结束或跳过时处理音频，退出销毁并释放视频 Blob。仅保留跳过动画按钮。更换视频时同步更新原声。
+
+
+- 开场动画已接入 assets/animation/南风不回信游戏开头动画3.mp4，由 src/scenes/IntroScene.ts 播放。点击开始进入 intro，视频播完或点击右上角跳过后进入 forest；保留视频原声，期间不播放菜单/森林配乐。视频按比例完整显示，加载失败可跳过，浏览器阻止有声播放时提示点击继续；退出场景销毁视频，重玩从头播放。
 
 - 已接入 `assets/audio/menu-room-bgm.mp3`（Luminous Forest）：菜单、房间/解谜、结尾动画之后的感谢页面循环播放；开场动画、森林、结尾动画期间不播放这首。音量暂设 0.35。
 - `src/MenuRoomMusic.ts` 负责音频预加载、浏览器首次点击解锁、场景退出时停止及清理。每次进入相应场景从头播放，沿用场景键 `menu` / `room` / `ending`。
@@ -109,7 +114,7 @@
 
 - **森林跑酷配乐**——`assets/audio/forest-bgm.mp3` 仅在 `ForestScene` 循环播放，音量暂设 0.35；进入房间、重玩或离开森林时停止并清理，避免重叠。菜单/房间使用 `menu-room-bgm.mp3`，两者不同时播放。
 
-- **开始菜单背景**——`assets/environment/森林花海_原场景清晰化_无坡_1920x1080_v2.png` 在 `MenuScene` 预加载，纹理 key 为 `ui-menu-background`；通过 Vite URL 导入随构建打包，以 960×540 逻辑尺寸为基准额外放大 4% 留边。场景内 Tween 每 18 秒往返一轮：横向 ±3px、纵向 ±4px、缩放额外变化 1.5%，退出菜单自动清理。标题、按钮和操作说明固定，音乐保持原流程，操作说明加半透明底色。该图仅用于菜单，森林仍沿用现有背景。
+- **开始菜单背景**——原花海图仍使用 ui-menu-background；src/MenuMemoryBackground.ts 仅扭曲背景。整幅画面以约 15 秒为一个周期缓慢呼吸：左侧下沉时右侧抬起，反向时交换；垂直位移两端各约 5px，不使用密集小波纹。背景推近幅度降至 0.8%，横向漂移 ±2px；文字和按钮固定。WebGL 使用单纹理管线，Canvas 模式保留轻微漂移。
 
 - **主角动画序列帧（Issue #4 ✅）**——idle(4f)/run(8f)/jump(4f)/fall(4f)，96×112 单帧、横向排布、朝右、透明底，完全符合规格。接入点：`ForestScene.preload` 加载、`Player` 按状态播放（物理数值未动）。
 - **森林背景**——`env-forest-no-slope-1920x1080.jpg` 作远景**主层**：静止铺满视口（scrollFactor 0、scale 1.02），在 2 倍渲染缓冲下约 1 源像素 = 1 物理像素（原生清晰）。`env-flower-slope-transparent-1920x1080.png` 花坡透明层已到货，当前动线无大斜坡，**暂存备用**（启用坡道时接入）。
