@@ -5,7 +5,7 @@ import ForestScene from './scenes/ForestScene';
 import RoomScene from './scenes/RoomScene';
 import EndingScene from './scenes/EndingScene';
 import { preloadMenuRoomMusic, playMenuRoomMusic } from './MenuRoomMusic';
-import { BASE_WIDTH, BASE_HEIGHT, HD_SCALE, applyHDCamera, computeBufferScale } from './systems/Resolution';
+import { BASE_WIDTH, BASE_HEIGHT, applyHDCamera, computeBufferScale, initialBufferSize } from './systems/Resolution';
 import menuBackgroundUrl from '../assets/ui/menu-opening-background.png?url';
 import menuTitleUrl from '../assets/ui/menu-opening-title.png?url';
 import menuButtonUrl from '../assets/ui/menu-opening-button.png?url';
@@ -152,14 +152,16 @@ class MenuScene extends Phaser.Scene {
 
 // 把游戏放进 index.html 中的 game 区域（容器尺寸由 CSS 铺满视口，勿用 JS 设高度）
 
+const initialBuffer = initialBufferSize();
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
-  // 初始渲染缓冲按设备像素比放大（上限 2x）；boot 后立即按画布实际 CSS 尺寸校准，
-  // 之后随窗口变化动态调整（见下方 syncRenderBuffer）——缓冲与屏幕设备像素 1:1，
-  // 浏览器不再放大画布，这是清晰度的根治点。scale.zoom 在 FIT 模式下不生效，勿改回。
-  width: Math.round(BASE_WIDTH * HD_SCALE),
-  height: Math.round(BASE_HEIGHT * HD_SCALE),
+  // 初始缓冲在 boot 前就按窗口宽 × dpr 算好（#game 铺满视口）——游戏从第一帧
+  // 就是 1:1 设备像素，不再有"先 1920、READY 后再校准"的首帧跳变。
+  // 之后随窗口/dpr 变化动态调整（见下方 syncRenderBuffer）。
+  // scale.zoom 在 FIT 模式下不生效，勿改回。
+  width: initialBuffer.width,
+  height: initialBuffer.height,
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -169,9 +171,13 @@ const game = new Phaser.Game({
   scene: [MenuScene, IntroScene, ForestScene, RoomScene, EndingScene],
 });
 
-/** 渲染缓冲 = 画布 CSS 宽 × 设备像素比（960..3840，16:9 恒定，FIT 等比不变） */
+/** 渲染缓冲 = 画布 CSS 宽 × 设备像素比（960..3840，16:9 恒定，FIT 等比不变）。
+ *  宽度实时读 getBoundingClientRect——scale.canvasBounds 是 REFRESH 时才更新的缓存，
+ *  连续拖动窗口时防抖执行点读到的常是上一档尺寸，缓冲会停在旧值（实测 950 窗口停在 1000）。 */
 const syncRenderBuffer = () => {
-  const cssWidth = game.scale.canvasBounds.width || game.scale.parentSize.width;
+  const cssWidth =
+    game.canvas?.getBoundingClientRect().width || game.scale.canvasBounds.width ||
+    game.scale.parentSize.width;
   const width = Math.round(BASE_WIDTH * computeBufferScale(cssWidth));
   const height = Math.round((width * BASE_HEIGHT) / BASE_WIDTH);
   if (game.scale.gameSize.width !== width) {
@@ -179,12 +185,29 @@ const syncRenderBuffer = () => {
   }
 };
 game.events.once(Phaser.Core.Events.READY, syncRenderBuffer);
-// 窗口缩放防抖校准；setGameSize 引发的二次 RESIZE 会算出相同尺寸而空转，无振荡
+// 窗口缩放防抖校准；setGameSize 引发的二次 RESIZE 会算出相同尺寸而空转，无振荡。
+// 除 Scale RESIZE 外再挂原生 window resize：浏览器缩放（Ctrl ±）/ dpr 变化只改
+// devicePixelRatio 与 innerWidth，不一定发 Scale RESIZE——实测 CDP 改 dpr=2 时
+// 缓冲停在旧值，Retina 上画面整块被拉伸发糊，必须原生事件兜底。
 let syncBufferTimer: number | undefined;
-game.scale.on(Phaser.Scale.Events.RESIZE, () => {
+const queueSyncBuffer = () => {
   window.clearTimeout(syncBufferTimer);
   syncBufferTimer = window.setTimeout(syncRenderBuffer, 150);
-});
+};
+game.scale.on(Phaser.Scale.Events.RESIZE, queueSyncBuffer);
+window.addEventListener('resize', queueSyncBuffer);
+// 跨屏拖动（Retina ↔ 外接屏）只改 devicePixelRatio、innerWidth 可能不变也不发
+// resize——用分辨率媒体查询变化兜底重算缓冲（dpr 变了就换下一个查询）
+const watchDpr = () => {
+  const query = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+  const onChange = () => {
+    query.removeEventListener('change', onChange);
+    queueSyncBuffer();
+    watchDpr();
+  };
+  query.addEventListener('change', onChange);
+};
+watchDpr();
 if (import.meta.env.DEV) {
   (window as unknown as Record<string, unknown>).__game = game;
 }

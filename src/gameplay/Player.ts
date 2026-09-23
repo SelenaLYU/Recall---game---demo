@@ -47,10 +47,11 @@ const ANIM_DEFS = [
 ] as const;
 
 /**
- * 序列帧单帧 96×112，缩放后角色视觉高约 81px（碰撞体 28×60，头/脚略溢出盒属正常，
- * 碰撞盒小于视觉对玩家更友好）。0.6 时角色偏小不易辨认，0.72 兼顾辨识度与碰撞准度。
+ * 序列帧单帧 96×112，缩放 0.75 = 精确 3:4 降采样（96→72、112→84 全整数目标，
+ * 重采样干净；此前 0.72 非整数采样边缘糊一档）。碰撞体 28×60，头/脚略溢出盒
+ * 属正常，碰撞盒小于视觉对玩家更友好。
  */
-const SPRITE_SCALE = 0.72;
+const SPRITE_SCALE = 0.75;
 /** 序列帧底部透明边距（实测约 5 源像素），精灵下移让它踩进草皮而不是悬空 */
 const FOOT_PADDING_PX = 5;
 
@@ -230,26 +231,18 @@ export class Player {
       this.jumpBufferTimer = 0;
       this.coyoteTimer = 0;
       this.opts.sfx?.jump();
-      this.squash(0.88, 1.14);
+      this.squash(0.93, 1.08);
       Effects.dust(this.scene, this.view.x, this.view.y + this.opts.height / 2 - 2, 4, 16);
     } else if (this.jumpBufferTimer > 0 && !onGround && this.airJumpsLeft > 0) {
-      // 二段跳：稍弱，空中翻滚一圈做辨识
+      // 二段跳：稍弱。空翻已按反馈移除（2026-09-24）——单张精灵图整体旋转
+      // 实机读作"纸片人转动"（无团身细节），与水彩氛围不搭，只留提气脉冲+光环
       this.airJumpsLeft -= 1;
       this.jumpBufferTimer = 0;
       this.body.setVelocityY(this.opts.jumpVelocity * 0.92);
       this.jumpLaunchVy = this.opts.jumpVelocity * 0.92;
       this.opts.sfx?.doubleJump();
-      this.squash(0.9, 1.12);
+      this.squash(0.94, 1.07);
       Effects.ring(this.scene, this.view.x, this.view.y + this.opts.height / 2 - 6, 0xd8e8d0);
-      // 翻滚 tween 挂在 sprite（而非 view）：避免被 squash 的 killTweensOf(view)
-      // 中途杀掉、停在半途角度造成“卡死”在倾斜姿势（实测修复）
-      this.scene.tweens.add({
-        targets: this.sprite,
-        angle: this.facing * 360,
-        duration: 280,
-        ease: 'Quad.easeOut',
-        onComplete: () => this.sprite.setRotation(0),
-      });
     }
 
     // 分段重力：半重力顶点（按住跳跃滞空更可控）+ 下落加重（弧线漂亮、落地更沉）
@@ -322,17 +315,18 @@ export class Player {
         ? 'run'
         : 'idle';
 
-    // ---- 落地反馈：只在世界着地那一帧触发，强度随落速（白色尘土已按要求移除）----
+    // ---- 落地反馈：只在世界着地那一帧触发，强度随落速（白色尘土已按要求移除；
+    //      2026-09-24 整体收一档：原 1.14/0.84 的挤压读作"果冻"，水彩氛围里显怪异）----
     if (onGround && !this.wasOnGround) {
       if (this.prevFallSpeed > this.opts.hardLandThreshold) {
         this.opts.sfx?.land();
         this.scene.cameras.main.shake(70, 0.002);
-        this.squash(1.14, 0.84);
+        this.squash(1.08, 0.9);
       } else if (this.prevFallSpeed > this.opts.softLandThreshold) {
         this.opts.sfx?.land();
-        this.squash(1.07, 0.9);
+        this.squash(1.04, 0.94);
       } else {
-        this.squash(1.04, 0.95);
+        this.squash(1.02, 0.97);
       }
     }
     this.prevFallSpeed = onGround ? 0 : this.body.velocity.y;
@@ -381,7 +375,8 @@ export class Player {
   /** 抓花专用序列（B 的 yuyu-grab 128×160 6f，帧内自带被抓的小茉莉）：
    * 帧内花心钉在藤蔓花环上，身体绕它摆动——不再用 jump 帧近似 */
   private static readonly GRAB_SHEET = 'char-yuyu-grab';
-  private static readonly GRAB_SCALE = 0.7;
+  /** 128×160 × 0.75 = 96×120 全整数目标，与行走帧同档的干净降采样 */
+  private static readonly GRAB_SCALE = 0.75;
   /** 每帧花心（源像素，实测），换帧时保持花心不跳 */
   private static readonly GRAB_FLOWER: Array<[number, number]> = [
     [85, 30], [88, 29], [85, 29], [74, 28], [66, 28], [76, 28],
@@ -599,16 +594,17 @@ export class Player {
         this.stepTimer = 0;
       }
 
-    // 下落纵向伸展（压扁 tween 进行中不覆盖）
+    // 下落纵向伸展（压扁 tween 进行中不覆盖；2026-09-24 上限 0.1→0.05：原幅度像被拽长）
     if (!onGround && !this.squashing) {
-      const targetY = 1 + Math.min(0.1, Math.max(0, this.body.velocity.y - 150) / 5500);
+      const targetY = 1 + Math.min(0.05, Math.max(0, this.body.velocity.y - 150) / 5500);
       this.view.scaleY += (targetY - this.view.scaleY) * Math.min(1, delta * 0.01);
     }
 
-    // 前倾：地面跑动时身体向移动方向倾约 4–6°，起步浅、全速深；空中/抓藤回正
-    //（挂在 view 上而非 sprite，避开二段跳空翻 tween；抓藤时由绳角接管旋转）
+    // 前倾：地面跑动时身体向移动方向倾约 3–4°，起步浅、全速深；空中/抓藤回正
+    //（挂在 view 上而非 sprite；抓藤时由绳角接管旋转。2026-09-24 自 5.7° 收敛：
+    // 叠加跑步帧自带的姿态倾斜后目测 ~10°+，读作"扑出去"）
     if (!this.attachedVine) {
-      const leanTarget = onGround ? this.facing * speedRatio * 0.1 : 0;
+      const leanTarget = onGround ? this.facing * speedRatio * 0.06 : 0;
       this.view.rotation += (leanTarget - this.view.rotation) * Math.min(1, delta * 0.008);
     }
   }

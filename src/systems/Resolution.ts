@@ -30,6 +30,13 @@ export function computeBufferScale(cssWidth: number): number {
   return Phaser.Math.Clamp(Math.round(cssWidth * dpr), BASE_WIDTH, MAX_BUFFER_WIDTH) / BASE_WIDTH;
 }
 
+/** boot 前用窗口宽估算初始缓冲（#game 铺满视口，canvas CSS≈窗口宽）：
+ * 让游戏从第一帧就是 1:1 设备像素，避免"先 1920 后校准"的首帧跳变 */
+export function initialBufferSize(): { width: number; height: number } {
+  const width = Math.round(BASE_WIDTH * computeBufferScale(window.innerWidth));
+  return { width, height: Math.round((width * BASE_HEIGHT) / BASE_WIDTH) };
+}
+
 /** 当前渲染缓冲倍率（= 相机 zoom） */
 export function bufferScaleOf(scene: Phaser.Scene): number {
   return scene.scale.gameSize.width / BASE_WIDTH;
