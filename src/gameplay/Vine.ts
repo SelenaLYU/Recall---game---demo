@@ -26,6 +26,9 @@ export class Vine {
   private readonly minLength: number;
   private readonly maxLength: number;
   private readonly visual: Phaser.GameObjects.Graphics;
+  /** 握点预告光环（玩家接近时亮起，标记可抓范围） */
+  private readonly handGlow: Phaser.GameObjects.Ellipse;
+  private near = false;
   private cooldownUntil = 0;
 
   constructor(
@@ -40,6 +43,11 @@ export class Vine {
     this.minLength = options?.minLength ?? Math.max(110, this.length - 60);
     this.maxLength = options?.maxLength ?? this.length + 30;
     this.visual = scene.add.graphics().setDepth(3);
+    this.handGlow = scene.add
+      .ellipse(0, 0, 64, 64, 0xf6e7b8, 0.3)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(3)
+      .setVisible(false);
     this.redraw();
   }
 
@@ -53,6 +61,27 @@ export class Vine {
 
   get available(): boolean {
     return this.scene.time.now >= this.cooldownUntil;
+  }
+
+  /** 玩家接近：握点光环亮起并轻摆预告（未抓住时由场景每帧调用 idleUpdate） */
+  setNear(near: boolean): void {
+    if (this.near === near) {
+      return;
+    }
+    this.near = near;
+    this.handGlow.setVisible(near);
+  }
+
+  /** 未抓住时的待机：向竖直方向弹性回落；玩家接近时叠加轻微摆动预告 */
+  idleUpdate(deltaMs: number): void {
+    const dt = Math.min(deltaMs, 50) / 1000;
+    this.angVel += -this.angle * 2.2 * dt;
+    if (this.near) {
+      this.angVel += Math.sin(this.scene.time.now * 0.004) * 0.4 * dt;
+    }
+    this.angVel *= 0.96;
+    this.angle = Phaser.Math.Clamp(this.angle + this.angVel * dt, -0.5, 0.5);
+    this.redraw();
   }
 
   /** 抓住瞬间带入水平动量；摆幅太小则给保底起摆，保证马上能用 */
@@ -110,6 +139,7 @@ export class Vine {
     g.clear();
     const handX = this.handX;
     const handY = this.handY;
+    this.handGlow.setPosition(handX, handY);
 
     // 主茎：带一点弧度（三段折线近似）
     g.lineStyle(6, 0x3f6b4f, 1);
@@ -129,8 +159,15 @@ export class Vine {
       g.fillEllipse(lx, ly, 14, 7);
     }
 
-    // 末端小结（提示握点）
-    g.fillStyle(0xe6cf97, 0.85);
-    g.fillCircle(handX, handY, 4);
+    // 末端花环握点：花瓣环 + 亮花心 + 描边圈，明确“这里能抓”
+    g.fillStyle(0xe9f5e4, 1);
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI * 2 * i) / 6 + 0.4;
+      g.fillEllipse(handX + Math.cos(a) * 8, handY + Math.sin(a) * 8, 10, 10);
+    }
+    g.lineStyle(2, 0x8a6d3b, 0.95);
+    g.strokeCircle(handX, handY, 12);
+    g.fillStyle(0xf6e7b8, 1);
+    g.fillCircle(handX, handY, 5);
   }
 }
