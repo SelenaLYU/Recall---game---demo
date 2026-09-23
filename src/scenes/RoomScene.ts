@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { Sfx } from '../systems/Sfx';
 import { Effects } from '../gameplay/Effects';
 import { applyHDCamera, HD_SCALE } from '../systems/Resolution';
+import { showClockPuzzleUI } from '../ui/ClockPuzzleUI';
+import { createFragmentHud, type FragmentHudHandle } from '../ui/FragmentHud';
 import {
   showCalendarText,
   showPhotoMemoryText,
@@ -100,14 +102,11 @@ function visibleBounds(scene: Phaser.Scene, key: string): VisibleBox {
   return box;
 }
 
-/** 碎片图标形状（HUD 右上） */
-const FRAGMENT_KINDS: Array<'photo' | 'radio' | 'clock'> = ['photo', 'radio', 'clock'];
-
 export default class RoomScene extends Phaser.Scene {
   private sfx!: Sfx;
   private hintText!: Phaser.GameObjects.Text;
   private hudLayer!: Phaser.GameObjects.Container;
-  private fragmentIcons = new Map<string, Phaser.GameObjects.Container>();
+  private fragmentHud?: FragmentHudHandle;
   private fragments = new Set<string>();
   private memoryOrb: Phaser.GameObjects.Container | null = null;
   private orbTouched = false;
@@ -146,7 +145,8 @@ export default class RoomScene extends Phaser.Scene {
   create(): void {
     // 场景复用：状态全部重置（AGENTS.md 第 5 节）；shutdown 会清空 LightsManager，灯光在下面重建
     this.fragments.clear();
-    this.fragmentIcons.clear();
+    this.fragmentHud?.destroy();
+    this.fragmentHud = undefined;
     this.memoryOrb = null;
     this.orbTouched = false;
     this.interacting = false;
@@ -552,94 +552,13 @@ export default class RoomScene extends Phaser.Scene {
 
   private openClock(): void {
     this.interacting = true;
-    const layer = this.add.container(0, 0).setDepth(200);
-    this.panel = layer;
-    this.panelBackdrop(layer);
-    layer.add(this.panelTitle(480, 58, '把指针调到接她放学的时间'));
-    this.addCloseButton(layer, 922, 34);
-
-    let hour = 12;
-    let minute = 0;
-    const face = this.add.graphics();
-    const cx = 480;
-    const cy = 260;
-    const redraw = () => {
-      face.clear();
-      face.fillStyle(0xf0e8d4, 1);
-      face.fillCircle(cx, cy, 110);
-      face.lineStyle(4, 0x2b2b2b, 1);
-      face.strokeCircle(cx, cy, 110);
-      for (let i = 0; i < 12; i++) {
-        const a = (Math.PI * 2 * i) / 12;
-        face.fillStyle(0x2b2b2b, 1);
-        face.fillCircle(cx + Math.sin(a) * 96, cy - Math.cos(a) * 96, i % 3 === 0 ? 5 : 3);
-      }
-      const hourAngle = (Math.PI * 2 * (hour % 12)) / 12 + (Math.PI * 2 * minute) / 720;
-      const minuteAngle = (Math.PI * 2 * minute) / 60;
-      face.lineStyle(7, 0x2b2b2b, 1);
-      face.lineBetween(cx, cy, cx + Math.sin(hourAngle) * 55, cy - Math.cos(hourAngle) * 55);
-      face.lineStyle(4, 0x8a6d3b, 1);
-      face.lineBetween(cx, cy, cx + Math.sin(minuteAngle) * 88, cy - Math.cos(minuteAngle) * 88);
-      face.fillStyle(0x2b2b2b, 1);
-      face.fillCircle(cx, cy, 6);
-    };
-    redraw();
-    layer.add(face);
-
-    const label = this.add
-      .text(480, 402, '12:00', {
-        fontFamily: 'monospace',
-        fontSize: '30px',
-        color: '#ffe9a8',
-        backgroundColor: 'rgba(6, 14, 10, 0.62)',
-        padding: { x: 14, y: 6 },
-      })
-      .setOrigin(0.5);
-    layer.add(label);
-    const sync = () => {
-      label.setText(`${hour}:${minute.toString().padStart(2, '0')}`);
-      redraw();
-    };
-
-    const mkBtn = (x: number, y: number, text: string, onClick: () => void) => {
-      const btn = this.add
-        .text(x, y, text, {
-          fontFamily: 'sans-serif',
-          fontSize: '20px',
-          color: '#101b16',
-          backgroundColor: '#cbb98a',
-          padding: { x: 14, y: 8 },
-        })
-        .setOrigin(0.5)
-        .setInteractive({ useHandCursor: true });
-      btn.on('pointerdown', onClick);
-      layer.add(btn);
-    };
-    mkBtn(360, 452, '时 −', () => {
-      hour = hour === 1 ? 12 : hour - 1;
-      sync();
-    });
-    mkBtn(440, 452, '时 +', () => {
-      hour = hour === 12 ? 1 : hour + 1;
-      sync();
-    });
-    mkBtn(520, 452, '分 +15', () => {
-      minute = (minute + 15) % 60;
-      sync();
-    });
-    mkBtn(600, 452, '分 −15', () => {
-      minute = (minute + 45) % 60;
-      sync();
-    });
-    mkBtn(700, 452, '确认', () => {
-      if (hour === 4 && minute === 15) {
-        this.closePanel();
+    showClockPuzzleUI(this, {
+      onClose: () => { this.interacting = false; },
+      onSolved: () => {
+        this.interacting = false;
         this.cameras.main.flash(140, 230, 207, 151);
         this.gainFragment('clock');
-      } else {
-        this.tweens.add({ targets: face, x: face.x + 8, duration: 50, yoyo: true, repeat: 3 });
-        this.showHint('指针似乎不对……日历里也许有线索');
-      }
+      },
     });
   }
 
@@ -651,22 +570,9 @@ export default class RoomScene extends Phaser.Scene {
     }
     this.fragments.add(kind);
     this.sfx.collect();
-    const icon = this.fragmentIcons.get(kind);
-    if (icon) {
-      icon.setVisible(true).setScale(0.1);
-      this.tweens.add({
-        targets: icon,
-        scale: { from: 0.1, to: 1.25 },
-        duration: 220,
-        yoyo: true,
-        hold: 60,
-        onComplete: () => icon.setScale(1),
-      });
-    }
+    this.fragmentHud?.collect(kind);
     if (this.fragments.size >= 3) {
       this.spawnMemoryOrb();
-    } else {
-      this.showHint(`记忆碎片 ${this.fragments.size}/3`);
     }
   }
 
@@ -751,25 +657,7 @@ export default class RoomScene extends Phaser.Scene {
     this.hudLayer.add(this.hintText);
     this.showHint('点击房间里的物件', 4500);
 
-    FRAGMENT_KINDS.forEach((kind, i) => {
-      const icon = this.add.container(838 + i * 44, 28).setVisible(false);
-      if (kind === 'photo') {
-        icon.add(this.add.rectangle(0, 0, 18, 14, GOLD).setStrokeStyle(2, 0x8a6d3b, 0.9));
-      } else if (kind === 'radio') {
-        icon.add(this.add.circle(0, 0, 9, GOLD).setStrokeStyle(2, 0x8a6d3b, 0.9));
-      } else {
-        icon.add(
-          this.add.polygon(0, 0, [
-            { x: 0, y: -10 },
-            { x: 9, y: 0 },
-            { x: 0, y: 10 },
-            { x: -9, y: 0 },
-          ], GOLD).setStrokeStyle(2, 0x8a6d3b, 0.9),
-        );
-      }
-      this.fragmentIcons.set(kind, icon);
-      this.hudLayer.add(icon);
-    });
+    this.fragmentHud = createFragmentHud(this);
   }
 
   /** 提示显示一段时间后自动淡出（与森林的区域提示一致，不再常驻） */
