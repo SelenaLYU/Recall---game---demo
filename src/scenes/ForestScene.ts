@@ -156,6 +156,7 @@ export default class ForestScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     this.player.update(delta);
     this.updateFlowerContact();
+    this.updateVineAffordance(delta);
     this.updateVineGrabCheck();
     this.updateHintZone();
     this.updateCameraLookahead(delta);
@@ -203,10 +204,10 @@ export default class ForestScene extends Phaser.Scene {
     });
   }
 
-  /** 藤蔓谷上方的横枝（纯视觉，藤蔓锚点挂在其上） */
+  /** 藤蔓谷上方的横枝（纯视觉，贴近背景笔触、低对比；藤蔓锚点挂在其上） */
   private buildVineBranch(): void {
-    const g = this.add.graphics().setDepth(0);
-    g.lineStyle(16, 0x2a3b30, 1);
+    const g = this.add.graphics().setDepth(0).setAlpha(0.9);
+    g.lineStyle(10, 0x305040, 1);
     g.beginPath();
     g.moveTo(820, 168);
     g.lineTo(980, 136);
@@ -214,9 +215,9 @@ export default class ForestScene extends Phaser.Scene {
     g.lineTo(1300, 128);
     g.lineTo(1430, 158);
     g.strokePath();
-    g.fillStyle(0x336049, 1);
+    g.fillStyle(0x2f5a44, 0.95);
     for (const x of [900, 1050, 1220, 1360]) {
-      g.fillEllipse(x, 132, 90, 34);
+      g.fillEllipse(x, 132, 90, 30);
     }
   }
 
@@ -229,6 +230,8 @@ export default class ForestScene extends Phaser.Scene {
     this.terrain.addPlatform({ x: 0, y: GROUND_TOP, width: 820, height: 80 });
     this.terrain.addPlatform({ x: 580, y: 480, width: 100, height: 24, kind: 'float' });
     this.terrain.addPlatform({ x: 750, y: 440, width: 110, height: 24, kind: 'float' });
+    // 第一根藤蔓下的练习落脚台：抓取失误不致死，可跳回左侧重试
+    this.terrain.addPlatform({ x: 905, y: 505, width: 100, height: 20, kind: 'float' });
     // 藤蔓谷 x 860–1400 之间为空（掉落死亡）
     this.terrain.addPlatform({ x: 1400, y: 470, width: 180, height: 24, kind: 'float' });
     this.terrain.addPlatform({ x: 1580, y: GROUND_TOP, width: 720, height: 80 });
@@ -343,10 +346,12 @@ export default class ForestScene extends Phaser.Scene {
     cam.setFollowOffset(0, -24);
   }
 
-  /** 镜头朝向前瞻：往面朝方向多看约 46px，平缓过渡 */
+  /** 镜头朝向前瞻：往面朝方向多看，平缓过渡；接近藤蔓谷时加大以提前暴露握点与对岸 */
   private updateCameraLookahead(delta: number): void {
     const cam = this.cameras.main;
-    const targetX = -this.player.facing * 46;
+    const nearPit = this.player.view.x > 640 && this.player.view.x < 1560;
+    const reach = nearPit ? 92 : 46;
+    const targetX = -this.player.facing * reach;
     cam.followOffset.x += (targetX - cam.followOffset.x) * Math.min(1, delta * 0.004);
   }
 
@@ -439,15 +444,34 @@ export default class ForestScene extends Phaser.Scene {
     this.lastFlower = onFlower;
   }
 
-  /** 空中靠近藤蔓握点自动抓住 */
+  /** 未抓住的藤蔓：接近预告（亮起+轻摆）与待机回落 */
+  private updateVineAffordance(delta: number): void {
+    for (const vine of this.vines) {
+      if (this.player.attached === vine) {
+        vine.setNear(false);
+        continue;
+      }
+      vine.idleUpdate(delta);
+      const distance = Phaser.Math.Distance.Between(
+        this.player.view.x,
+        this.player.view.y - 20,
+        vine.handX,
+        vine.handY,
+      );
+      vine.setNear(distance < 140);
+    }
+  }
+
+  /** 空中靠近藤蔓握点自动抓住：上升近距离也可抓（40px），下落范围稍宽（52px） */
   private updateVineGrabCheck(): void {
     if (this.player.attached) {
       return;
     }
     const body = this.player.view.body as Phaser.Physics.Arcade.Body;
-    if (!body.enable || body.onFloor() || body.velocity.y <= -60) {
+    if (!body.enable || body.onFloor()) {
       return;
     }
+    const range = body.velocity.y < 0 ? 40 : 52;
     for (const vine of this.vines) {
       const distance = Phaser.Math.Distance.Between(
         this.player.view.x,
@@ -455,7 +479,7 @@ export default class ForestScene extends Phaser.Scene {
         vine.handX,
         vine.handY,
       );
-      if (vine.available && distance < 52) {
+      if (vine.available && distance < range) {
         this.player.attachVine(vine);
         break;
       }

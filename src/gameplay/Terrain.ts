@@ -20,43 +20,44 @@ export interface SlopeDef {
 }
 
 const COLORS = {
-  soil: 0x2f4a3c,
+  soilTop: 0x36543f,
+  soilDeep: 0x24392c,
+  soilSpeckle: 0x1d3026,
+  soilSpeckleLight: 0x41614f,
   grass: 0x4a7a5c,
-  grassLight: 0x5c9070,
-  outline: 0x11251d,
+  /** 可站立表面的统一识别亮边（玩家据此辨认落脚处） */
+  grassEdge: 0x8fd1a8,
+  grassBlade: 0x69a07e,
+  root: 0x1c3026,
 } as const;
 
-const GRASS_LIP = 10;
+const GRASS_LIP = 12;
 /** 台阶最大上升高度，越小越顺滑 */
 const MAX_STEP_RISE = 14;
 
 /**
- * 地形构建模块：把数据化的平台/斜坡定义变成静态碰撞体 + 可读的画面。
- * 斜坡 = 无碰撞的视觉草皮带 + 底下细台阶静态碰撞体（Arcade 无原生斜面，见 AGENTS.md 第 5 节）。
+ * 地形构建：碰撞与画面分离——Arcade 静态碰撞体隐藏不渲染，
+ * 在相同坐标单独绘制「草皮亮边 + 土层 + 根系」（可站立表面的统一识别线）。
+ * B 的地面/平台贴图到货后，仅替换绘制函数，碰撞坐标不变。
  */
 export class Terrain {
-  /** 全部静态碰撞体，场景用它和角色建 collider */
+  /** 全部静态碰撞体（隐藏），场景用它和角色建 collider */
   readonly solids: Phaser.GameObjects.Rectangle[] = [];
 
   constructor(private readonly scene: Phaser.Scene) {}
 
   addPlatform(def: PlatformDef): void {
-    const kind = def.kind ?? 'ground';
     const body = this.scene.add
-      .rectangle(def.x, def.y, def.width, def.height, COLORS.soil)
+      .rectangle(def.x, def.y, def.width, def.height, COLORS.soilTop)
       .setOrigin(0, 0)
-      .setStrokeStyle(2, COLORS.outline, 0.5);
+      .setVisible(false);
     this.scene.physics.add.existing(body, true);
     this.solids.push(body);
 
-    if (kind === 'ground') {
-      this.addGrassLip(def.x, def.y, def.width);
-      this.addTufts(def.x, def.y, def.width, COLORS.grassLight);
+    if ((def.kind ?? 'ground') === 'ground') {
+      this.drawGround(def.x, def.y, def.width, def.height);
     } else {
-      // 浮空平台整块用草色，轻且清晰
-      body.setFillStyle(COLORS.grass);
-      this.addGrassLip(def.x, def.y, def.width, COLORS.grassLight);
-      this.addTufts(def.x, def.y, def.width, 0x69a07e);
+      this.drawFloat(def.x, def.y, def.width, def.height);
     }
   }
 
@@ -67,22 +68,22 @@ export class Terrain {
       const topY = def.y + (def.drop * i) / steps;
       const height = def.y + def.drop - topY;
       const step = this.scene.add
-        .rectangle(def.x + i * stepWidth, topY, Math.ceil(stepWidth) + 1, height, COLORS.soil)
-        .setOrigin(0, 0);
+        .rectangle(def.x + i * stepWidth, topY, Math.ceil(stepWidth) + 1, height, COLORS.soilTop)
+        .setOrigin(0, 0)
+        .setVisible(false);
       this.scene.physics.add.existing(step, true);
       this.solids.push(step);
     }
 
-    // 视觉草皮带：沿台阶角点连线厚 12px，渲染在角色之上，脚步陷入读作“踩进草里”
+    // 视觉草皮带：沿台阶角点连线，顶缘用统一亮边标注可站立线
     const band = this.scene.add.graphics().setDepth(5);
     const p1 = { x: def.x, y: def.y };
     const p2 = { x: def.x + def.width, y: def.y + def.drop };
     band.fillStyle(COLORS.grass, 1);
     band.fillPoints([p1, p2, { x: p2.x, y: p2.y + 12 }, { x: p1.x, y: p1.y + 12 }], true);
-    band.lineStyle(3, COLORS.grassLight, 0.9);
+    band.lineStyle(3, COLORS.grassEdge, 1);
     band.strokePoints([p1, p2], false);
-    // 坡面草簇
-    band.fillStyle(COLORS.grassLight, 1);
+    band.fillStyle(COLORS.grassBlade, 1);
     for (let t = 0.1; t < 1; t += 0.17) {
       const tx = def.x + def.width * t;
       const ty = def.y + def.drop * t + 6;
@@ -91,20 +92,60 @@ export class Terrain {
     }
   }
 
-  /** 草皮上的确定性小草簇，让平台顶不呆板 */
-  private addTufts(x: number, y: number, width: number, color: number): void {
+  /** 厚地面：土层渐变 + 统一草皮亮边 + 草叶 + 根系 */
+  private drawGround(x: number, y: number, width: number, height: number): void {
     const g = this.scene.add.graphics();
-    g.fillStyle(color, 1);
+    // 土层（草皮以下）
+    g.fillGradientStyle(COLORS.soilTop, COLORS.soilTop, COLORS.soilDeep, COLORS.soilDeep, 1);
+    g.fillRect(x, y + GRASS_LIP, width, height - GRASS_LIP);
+    // 碎石肌理
+    for (let ty = y + GRASS_LIP + 18; ty < y + height - 10; ty += 30) {
+      for (let tx = x + 16 + ((ty * 13) % 22); tx < x + width - 10; tx += 27) {
+        const dark = (tx + ty) % 2 === 0;
+        g.fillStyle(dark ? COLORS.soilSpeckle : COLORS.soilSpeckleLight, 0.55);
+        g.fillCircle(tx, ty, dark ? 2.2 : 1.7);
+      }
+    }
+    // 草皮 + 统一亮边（落脚识别线）
+    g.fillStyle(COLORS.grass, 1);
+    g.fillRect(x, y, width, GRASS_LIP);
+    g.fillStyle(COLORS.grassEdge, 1);
+    g.fillRect(x, y, width, 3);
+    // 草叶
+    g.fillStyle(COLORS.grassBlade, 1);
     for (let tx = x + 14; tx < x + width - 8; tx += 54) {
       const h = 5 + ((tx * 7) % 6);
       g.fillTriangle(tx - 2, y + 3, tx + 2, y + 3, tx, y + 3 - h);
     }
+    // 根系：从草皮下垂的短根
+    g.lineStyle(2, COLORS.root, 0.75);
+    for (let rx = x + 40; rx < x + width - 20; rx += 88) {
+      const depth = 26 + ((rx * 11) % 22);
+      g.beginPath();
+      g.moveTo(rx, y + GRASS_LIP);
+      g.lineTo(rx + 3, y + GRASS_LIP + depth * 0.55);
+      g.lineTo(rx - 2, y + GRASS_LIP + depth);
+      g.strokePath();
+      g.beginPath();
+      g.moveTo(rx + 1, y + GRASS_LIP + depth * 0.4);
+      g.lineTo(rx + 10, y + GRASS_LIP + depth * 0.62);
+      g.strokePath();
+    }
   }
 
-  private addGrassLip(x: number, y: number, width: number, color: number = COLORS.grass): void {
-    this.scene.add
-      .rectangle(x, y, width, GRASS_LIP, color)
-      .setOrigin(0, 0)
-      .setStrokeStyle(2, COLORS.outline, 0.35);
+  /** 薄浮空平台：圆角草板 + 四周亮边 + 顶部草叶 */
+  private drawFloat(x: number, y: number, width: number, height: number): void {
+    const g = this.scene.add.graphics();
+    g.fillStyle(COLORS.grass, 1);
+    g.fillRoundedRect(x, y, width, height, 6);
+    g.lineStyle(2, COLORS.grassEdge, 0.9);
+    g.strokeRoundedRect(x, y, width, height, 6);
+    g.fillStyle(COLORS.grassEdge, 1);
+    g.fillRect(x + 3, y + 1, width - 6, 3);
+    g.fillStyle(COLORS.grassBlade, 1);
+    for (let tx = x + 14; tx < x + width - 8; tx += 46) {
+      const h = 5 + ((tx * 7) % 6);
+      g.fillTriangle(tx - 2, y + 3, tx + 2, y + 3, tx, y + 3 - h);
+    }
   }
 }
