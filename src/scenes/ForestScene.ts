@@ -599,7 +599,9 @@ export default class ForestScene extends Phaser.Scene {
         // 关键瞬间光：弹起时一圈淡粉光环（有来源的动态光，见 AGENTS.md 光影约定）
         Effects.ring(this, onFlower.x, onFlower.top, 0xf3c2d8);
       } else {
-        // 普通花反馈只留脚步声（光环 2026-09-24 按需求去除；花本体保持静态）
+        // 普通花反馈：花本体极轻下沉+暖光一闪（软垫读法）+ 脚步声——
+        // 不摇不摆、无粒子无光圈（历次反馈形式的收敛，见 Flower.press 注释）
+        onFlower.press(this);
         this.sfx.step();
       }
     }

@@ -88,7 +88,7 @@ export class Flower {
     }
   }
 
-  /** 被踩：花头压扁回弹；仅弹跳花有此演出，静态平台无反应 */
+  /** 被踩（弹跳花）：花头压扁回弹 */
   squash(scene: Phaser.Scene): void {
     if (!this.bouncy) {
       return;
@@ -101,6 +101,33 @@ export class Flower {
       scaleY: this.baseScaleY,
       duration: 450,
       ease: 'Elastic.easeOut',
+    });
+  }
+
+  /** 被踩（静态平台花）：极轻下沉 + 花体暖光一闪的"软垫"读法——
+   *  不摇不摆、无粒子无光圈（历次反馈：压扁✗、白尘✗、光环✗、纯声音✗，
+   *  收敛为花本体 3.5% 的下沉与一闪提亮，2026-09-24） */
+  press(scene: Phaser.Scene): void {
+    if (this.bouncy) {
+      return;
+    }
+    scene.tweens.killTweensOf(this.display);
+    this.display.setScale(this.baseScaleX, this.baseScaleY * 0.965);
+    const img = this.display as Phaser.GameObjects.Image;
+    if (typeof img.setTint === 'function') {
+      img.setTint(0xfff2d8);
+    }
+    scene.tweens.add({
+      targets: this.display,
+      scaleX: this.baseScaleX,
+      scaleY: this.baseScaleY,
+      duration: 180,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        if (typeof img.clearTint === 'function') {
+          img.clearTint();
+        }
+      },
     });
   }
 }
