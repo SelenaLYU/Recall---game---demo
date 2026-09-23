@@ -115,6 +115,8 @@ export default class RoomScene extends Phaser.Scene {
   private panel: Phaser.GameObjects.Container | null = null;
   private hintTimer?: Phaser.Time.TimerEvent;
   private hintFade?: Phaser.Tweens.Tween;
+  /** 拼图已解开（锁输入，播完成效果） */
+  private puzzleSolved = false;
   /** 石槽水面中心（playFishSwim 用） */
   private basinWater: { x: number; y: number } | null = null;
   /** hudLayer 随渲染缓冲重缩放的处理器（场景关闭时解绑） */
@@ -161,6 +163,7 @@ export default class RoomScene extends Phaser.Scene {
     this.basinWater = null;
     this.orbLight = undefined;
     this.radioLight = undefined;
+    this.puzzleSolved = false;
 
     applyHDCamera(this);
 
@@ -439,35 +442,120 @@ export default class RoomScene extends Phaser.Scene {
       img.setPosition(x, y);
       layer.add(img);
       tileImages.set(tile, img);
-      img.on('pointerdown', () => {
-        const at = cells.indexOf(tile);
-        if (this.adjacentPositions(blank).includes(at)) {
-          cells[blank] = tile;
-          cells[at] = 15;
-          blank = at;
-          drawBlank();
-          const target = gridXY(blank);
-          this.tweens.add({
-            targets: img,
-            x: target.x,
-            y: target.y,
-            duration: 110,
-            ease: 'Quad.easeOut',
-          });
-          this.sfx.step();
-          if (cells.every((t, i) => t === i)) {
-            this.time.delayedCall(160, () => this.onPuzzleSolved(layer));
-          }
+
+      // 拖拉 + 点击双通道：点击 = 与空格相邻即滑入；拖拽 = 朝空格方向拖过阈值即滑入
+      const tryMove = (dirX: number, dirY: number): boolean => {
+        if (this.puzzleSolved) {
+          return false;
         }
+        const at = cells.indexOf(tile);
+        if (dirX !== 0 && (dirX > 0 ? at % 4 === 3 : at % 4 === 0)) {
+          return false;
+        }
+        const target = at + dirX + dirY * 4;
+        if (target < 0 || target > 15 || cells[target] !== 15) {
+          return false;
+        }
+        cells[at] = 15;
+        cells[target] = tile;
+        blank = at;
+        drawBlank();
+        const dest = gridXY(target);
+        this.tweens.add({
+          targets: img,
+          x: dest.x,
+          y: dest.y,
+          duration: 110,
+          ease: 'Quad.easeOut',
+        });
+        this.sfx.step();
+        if (cells.every((t, i) => t === i)) {
+          this.time.delayedCall(160, () => this.onPuzzleSolved(layer));
+        }
+        return true;
+      };
+      const tryClick = () => {
+        // 点空格四周任意一块都能滑入
+        tryMove(1, 0) || tryMove(-1, 0) || tryMove(0, 1) || tryMove(0, -1);
+      };
+      let downX = 0;
+      let downY = 0;
+      let pressed = false;
+      img.on('pointerdown', (p: Phaser.Input.Pointer) => {
+        pressed = true;
+        downX = p.x;
+        downY = p.y;
+      });
+      img.on('pointermove', (p: Phaser.Input.Pointer) => {
+        if (!pressed) {
+          return;
+        }
+        const dx = p.x - downX;
+        const dy = p.y - downY;
+        if (Math.hypot(dx, dy) > 34) {
+          pressed = false;
+          tryMove(
+            Math.abs(dx) >= Math.abs(dy) ? Math.sign(dx) : 0,
+            Math.abs(dx) >= Math.abs(dy) ? 0 : Math.sign(dy),
+          );
+        }
+      });
+      img.on('pointerup', (p: Phaser.Input.Pointer) => {
+        if (!pressed) {
+          return;
+        }
+        pressed = false;
+        const dx = p.x - downX;
+        const dy = p.y - downY;
+        if (Math.hypot(dx, dy) < 10) {
+          tryClick();
+        } else {
+          tryMove(
+            Math.abs(dx) >= Math.abs(dy) ? Math.sign(dx) : 0,
+            Math.abs(dx) >= Math.abs(dy) ? 0 : Math.sign(dy),
+          );
+        }
+      });
+      img.on('pointerout', () => {
+        pressed = false;
       });
     }
   }
 
   private onPuzzleSolved(layer: Phaser.GameObjects.Container): void {
-    this.closePanel();
-    this.cameras.main.flash(140, 230, 207, 151);
-    this.gainFragment('photo');
-    this.openDomPanel(() => showPhotoMemoryText(this, photoFrameUrl));
+    if (this.puzzleSolved) {
+      return;
+    }
+    this.puzzleSolved = true;
+    // 完成效果：完整照片淡入合拢 → 金光扫过 + 光环 → 停一拍再收起进文字面板
+    const boardX = 480 - 144 * 2;
+    const boardY = 92;
+    const full = this.add
+      .image(480, boardY + 192, 'room-photo')
+      .setDisplaySize(576, 384)
+      .setAlpha(0);
+    layer.add(full);
+    this.tweens.add({ targets: full, alpha: 1, duration: 320, ease: 'Quad.easeOut' });
+
+    const sweep = this.add
+      .rectangle(0, boardY + 192, 64, 400, 0xfff2cc, 0.32)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    layer.add(sweep);
+    this.tweens.add({
+      targets: sweep,
+      x: boardX + 640,
+      duration: 650,
+      delay: 240,
+      ease: 'Quad.easeInOut',
+      onComplete: () => sweep.destroy(),
+    });
+    Effects.ring(this, 480, boardY + 192);
+    this.time.delayedCall(1150, () => {
+      this.closePanel();
+      this.cameras.main.flash(140, 230, 207, 151);
+      this.gainFragment('photo');
+      this.openDomPanel(() => showPhotoMemoryText(this, photoFrameUrl));
+    });
   }
 
   private adjacentPositions(pos: number): number[] {
@@ -663,7 +751,8 @@ export default class RoomScene extends Phaser.Scene {
       fontFamily: 'sans-serif',
       fontSize: '15px',
       color: '#f4f9f2',
-      backgroundColor: 'rgba(6, 14, 10, 0.62)',
+      // 与森林提示同款深色底牌，任何背景上可读
+      backgroundColor: 'rgba(9, 20, 15, 0.8)',
       padding: { x: 10, y: 6 },
     });
     this.hudLayer.add(this.hintText);
