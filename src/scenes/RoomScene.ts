@@ -16,31 +16,95 @@ const ROOM_WIDTH = 960;
 const ROOM_HEIGHT = 540;
 /** 前景地板面（角色脚底所在线） */
 const FLOOR_TOP = 492;
+/** 角色可走范围：画面两端是前景花丛，走进去会像站在花里 */
+const WALK_LEFT = 165;
+const WALK_RIGHT = 800;
 
 const GOLD = 0xe6cf97;
-const PANEL_BG = 0x101b16;
 
 type ObjectKind = 'clock' | 'radio' | 'photo' | 'calendar' | 'pot' | 'fish';
 
 interface RoomObjectDef {
   kind: ObjectKind;
   texture: string;
+  /** center=按可见中心挂墙；bottom=按可见底部贴桌面/地面 */
+  anchor: 'center' | 'bottom';
+  /** 锚点世界坐标（center：可见中心；bottom：可见底部接地点） */
   x: number;
   y: number;
-  scale: number;
+  /** 期望可见高/宽（px，按美术交互预览图 1:2 换算） */
+  targetH?: number;
+  targetW?: number;
   depth: number;
-  /** 点击后角色走到的位置 */
+  /** 点击后角色走到的位置（须在可走范围内，保证 autoWalk 能到达） */
   standX: number;
+  /** 桌面/地面接触阴影 */
+  shadow?: boolean;
 }
 
+/** 摆位换算自 assets/environment/env-memory-room-interactive-preview-1920x1080.png（坐标 ÷2）：
+ * 挂钟挂后墙书架右侧，收音机在中央方桌桌心，相框在右侧柜面左端，日历立在右前方案几，
+ * 花盆/石槽分别落在左右前景花丛里（接地）。 */
 const OBJECT_DEFS: RoomObjectDef[] = [
-  { kind: 'clock', texture: 'room-clock', x: 340, y: 225, scale: 0.4, depth: 1, standX: 340 },
-  { kind: 'radio', texture: 'room-radio', x: 490, y: 335, scale: 0.42, depth: 1, standX: 490 },
-  { kind: 'photo', texture: 'room-photo', x: 640, y: 300, scale: 0.4, depth: 1, standX: 640 },
-  { kind: 'calendar', texture: 'room-calendar', x: 835, y: 320, scale: 0.38, depth: 1, standX: 835 },
-  { kind: 'pot', texture: 'room-pot', x: 215, y: 425, scale: 0.4, depth: 8, standX: 320 },
-  { kind: 'fish', texture: 'room-fish', x: 825, y: 480, scale: 0.5, depth: 8, standX: 690 },
+  { kind: 'clock', texture: 'room-clock', anchor: 'center', x: 505, y: 234, targetH: 96, depth: 1, standX: 505 },
+  { kind: 'radio', texture: 'room-radio', anchor: 'bottom', x: 505, y: 359, targetH: 40, depth: 1, standX: 505, shadow: true },
+  { kind: 'photo', texture: 'room-photo', anchor: 'bottom', x: 644, y: 302, targetH: 30, depth: 1, standX: 644, shadow: true },
+  { kind: 'calendar', texture: 'room-calendar', anchor: 'bottom', x: 838, y: 340, targetH: 56, depth: 1, standX: 800, shadow: true },
+  { kind: 'pot', texture: 'room-pot', anchor: 'bottom', x: 215, y: 500, targetH: 215, depth: 8, standX: 300 },
+  { kind: 'fish', texture: 'room-fish', anchor: 'bottom', x: 774, y: 527, targetW: 205, depth: 8, standX: 660 },
 ];
+
+interface VisibleBox {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  w: number;
+  h: number;
+}
+
+const BBOX_CACHE = new Map<string, VisibleBox>();
+
+/** 纹理不透明像素包围盒：摆件按“可见像素”贴家具，自动吃掉美术 PNG 的透明留白 */
+function visibleBounds(scene: Phaser.Scene, key: string): VisibleBox {
+  const cached = BBOX_CACHE.get(key);
+  if (cached) return cached;
+  const source = scene.textures.get(key).getSourceImage() as
+    CanvasImageSource & { width: number; height: number };
+  const w = source.width;
+  const h = source.height;
+  const box: VisibleBox = { left: 0, top: 0, right: w - 1, bottom: h - 1, w, h };
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.drawImage(source, 0, 0);
+    const data = ctx.getImageData(0, 0, w, h).data;
+    let left = w;
+    let right = -1;
+    let top = h;
+    let bottom = -1;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (data[(y * w + x) * 4 + 3] > 24) {
+          if (x < left) left = x;
+          if (x > right) right = x;
+          if (y < top) top = y;
+          if (y > bottom) bottom = y;
+        }
+      }
+    }
+    if (right >= left) {
+      box.left = left;
+      box.top = top;
+      box.right = right;
+      box.bottom = bottom;
+    }
+  }
+  BBOX_CACHE.set(key, box);
+  return box;
+}
 
 /** 碎片图标形状（HUD 右上） */
 const FRAGMENT_KINDS: Array<'photo' | 'radio' | 'clock'> = ['photo', 'radio', 'clock'];
@@ -57,6 +121,10 @@ export default class RoomScene extends Phaser.Scene {
   /** 有面板（拼图/收音机/时钟/文字）打开时锁定其它交互 */
   private interacting = false;
   private panel: Phaser.GameObjects.Container | null = null;
+  private hintTimer?: Phaser.Time.TimerEvent;
+  private hintFade?: Phaser.Tweens.Tween;
+  /** 石槽水面中心（playFishSwim 用） */
+  private basinWater: { x: number; y: number } | null = null;
 
   constructor() {
     super({
@@ -113,9 +181,16 @@ export default class RoomScene extends Phaser.Scene {
     this.interacting = false;
     this.panel?.destroy();
     this.panel = null;
+    this.hintTimer?.remove();
+    this.hintFade?.remove();
+    this.hintTimer = undefined;
+    this.hintFade = undefined;
+    this.basinWater = null;
 
     applyHDCamera(this);
-    this.physics.world.setBounds(0, 0, ROOM_WIDTH, ROOM_HEIGHT, true, true, false, false);
+    this.physics.world.setBounds(
+      WALK_LEFT, 0, WALK_RIGHT - WALK_LEFT, ROOM_HEIGHT, true, true, false, false,
+    );
 
     // 空房间背景铺满（1920×1080 源 0.5 缩放，高清缓冲下 1:1 源像素）
     this.add.image(0, 0, 'room-bg').setOrigin(0, 0).setScale(0.5).setDepth(0);
@@ -125,7 +200,9 @@ export default class RoomScene extends Phaser.Scene {
     this.physics.add.existing(floor, true);
 
     this.sfx = new Sfx(this, { ambient: false }); // 室内：无风声鸟鸣
-    this.player = new Player(this, { x: 90, y: FLOOR_TOP - 30, speed: 200, sfx: this.sfx });
+    this.player = new Player(this, { x: 185, y: FLOOR_TOP - 30, speed: 200, sfx: this.sfx });
+    // 深度分层：桌/墙上物件在后（depth 1）< 角色（5）< 前景花盆/石槽（8）
+    this.player.view.setDepth(5);
     this.physics.add.collider(this.player.view, floor);
 
     this.buildObjects();
@@ -143,21 +220,54 @@ export default class RoomScene extends Phaser.Scene {
     this.checkMemoryOrbTouch();
   }
 
-  /** 六个可点击物件：悬停提示 + 点击自动走近后交互 */
+  /** 六个可点击物件：按美术预览落位（可见像素贴家具），悬停金色微光 + 放大点击热区 */
   private buildObjects(): void {
     for (const def of OBJECT_DEFS) {
-      const img = this.add
-        .image(def.x, def.y, def.texture)
-        .setScale(def.scale)
-        .setDepth(def.depth);
-      img.setInteractive({ useHandCursor: true });
-      img.on('pointerover', () => {
-        if (!this.interacting) {
-          img.setScale(def.scale * 1.05);
-        }
+      const box = visibleBounds(this, def.texture);
+      const vw0 = box.right - box.left + 1;
+      const vh0 = box.bottom - box.top + 1;
+      const scale = def.targetH !== undefined ? def.targetH / vh0 : (def.targetW ?? vh0) / vw0;
+      const vw = vw0 * scale;
+      const vh = vh0 * scale;
+      // 把“可见像素”的中心/底部对到锚点（补偿 PNG 透明留白）
+      const offX = (box.left + box.right + 1) / 2 - box.w / 2;
+      const img = this.add.image(def.x - offX * scale, 0, def.texture).setScale(scale).setDepth(def.depth);
+      if (def.anchor === 'bottom') {
+        img.setOrigin(0.5, 1);
+        img.y = def.y + (box.h - 1 - box.bottom) * scale;
+      } else {
+        img.setOrigin(0.5, 0.5);
+        img.y = def.y - ((box.top + box.bottom + 1) / 2 - box.h / 2) * scale;
+      }
+      const cy = def.anchor === 'bottom' ? def.y - vh / 2 : def.y;
+
+      if (def.kind === 'fish') {
+        this.basinWater = { x: def.x, y: def.y - vh * 0.42 };
+      }
+      if (def.shadow) {
+        this.add
+          .ellipse(def.x, def.y + 2, vw * 0.85, 6, 0x0c1512, 0.24)
+          .setDepth(def.depth - 0.15);
+      }
+      // 悬停微光（金色，与钥匙/记忆球同系）+ 放大的隐形热区，视觉尺寸和可点性解耦
+      const glow = this.add
+        .ellipse(def.x, cy, Math.max(vw * 1.5, 40), Math.max(vh * 1.25, 36), GOLD, 0)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(def.depth - 0.05);
+      const hit = this.add
+        .rectangle(def.x, cy, Math.max(vw + 24, 50), Math.max(vh + 20, 46), 0x000000, 0)
+        .setDepth(def.depth + 0.1)
+        .setInteractive({ useHandCursor: true });
+      hit.on('pointerover', () => {
+        if (this.interacting) return;
+        img.setScale(scale * 1.04);
+        this.tweens.add({ targets: glow, alpha: 0.26, duration: 140 });
       });
-      img.on('pointerout', () => img.setScale(def.scale));
-      img.on('pointerdown', () => this.onObjectClicked(def));
+      hit.on('pointerout', () => {
+        img.setScale(scale);
+        this.tweens.add({ targets: glow, alpha: 0, duration: 180 });
+      });
+      hit.on('pointerdown', () => this.onObjectClicked(def));
     }
   }
 
@@ -232,17 +342,19 @@ export default class RoomScene extends Phaser.Scene {
     });
   }
 
-  /** 鱼缸反馈：几尾小鱼游过一次 */
+  /** 鱼缸反馈：几尾小鱼贴着石槽水面游过一次 */
   private playFishSwim(): void {
+    const basin = this.basinWater;
+    if (!basin) return;
     for (let i = 0; i < 3; i++) {
       const fish = this.add
-        .ellipse(900 + i * 30, 462 + (i % 2) * 14, 16, 7, 0xd8e8d0, 0.85)
-        .setDepth(9);
+        .ellipse(basin.x - 58 + i * 12, basin.y - 5 + (i % 2) * 9, 15, 6, 0xe8f2e0, 0.85)
+        .setDepth(8.05);
       this.tweens.add({
         targets: fish,
-        x: 720 - i * 20,
-        duration: 1600 + i * 300,
-        delay: i * 160,
+        x: basin.x + 58 - i * 10,
+        duration: 1500 + i * 280,
+        delay: i * 150,
         yoyo: true,
         ease: 'Sine.easeInOut',
         onComplete: () => fish.destroy(),
@@ -364,10 +476,10 @@ export default class RoomScene extends Phaser.Scene {
     layer.add(this.panelTitle(480, 80, '旋转旋钮，调一个频道'));
     this.addCloseButton(layer, 916, 40);
 
-    const radioImg = this.add.image(480, 250, 'room-radio').setScale(1.1);
+    const radioImg = this.add.image(480, 226, 'room-radio').setScale(0.95);
     layer.add(radioImg);
     const channelText = this.add
-      .text(480, 360, '咔。', {
+      .text(480, 366, '咔。', {
         fontFamily: 'sans-serif',
         fontSize: '20px',
         color: '#f4f9f2',
@@ -375,11 +487,11 @@ export default class RoomScene extends Phaser.Scene {
       .setOrigin(0.5);
     layer.add(channelText);
     const knob = this.add
-      .circle(480, 425, 34, 0x8a6d3b, 1)
+      .circle(480, 432, 34, 0x8a6d3b, 1)
       .setStrokeStyle(3, GOLD, 1)
       .setInteractive({ useHandCursor: true });
     const knobText = this.add
-      .text(480, 425, '旋钮', { fontFamily: 'sans-serif', fontSize: '14px', color: '#101b16' })
+      .text(480, 432, '旋钮', { fontFamily: 'sans-serif', fontSize: '14px', color: '#101b16' })
       .setOrigin(0.5);
     layer.add([knob, knobText]);
 
@@ -537,13 +649,14 @@ export default class RoomScene extends Phaser.Scene {
   }
 
   private spawnMemoryOrb(): void {
-    this.memoryOrb = this.add.container(480, 240).setDepth(6);
+    // 悬在方桌上空（挂钟 234 与桌面 360 之间），避开挂钟与相框
+    this.memoryOrb = this.add.container(480, 305).setDepth(6);
     const glow = this.add.ellipse(0, 0, 110, 110, GOLD, 0.2);
     const core = this.add.circle(0, 0, 26, GOLD).setStrokeStyle(3, 0xf6e7b8, 0.9);
     this.memoryOrb.add([glow, core]);
     this.tweens.add({
       targets: this.memoryOrb,
-      y: 226,
+      y: 291,
       duration: 1500,
       yoyo: true,
       repeat: -1,
@@ -557,7 +670,7 @@ export default class RoomScene extends Phaser.Scene {
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
-    Effects.ring(this, 480, 240);
+    Effects.ring(this, 480, 305);
     this.sfx.door();
     this.showHint('三块碎片融成了记忆球——走过去触碰它');
   }
@@ -566,10 +679,8 @@ export default class RoomScene extends Phaser.Scene {
     if (!this.memoryOrb || this.orbTouched || this.interacting) {
       return;
     }
-    if (
-      Math.abs(this.player.view.x - 480) < 52 &&
-      Math.abs(this.player.view.y - 240) < 130
-    ) {
+    // 球悬在走道上空，只按横向距离判定（此前 |y-240|<130 对 view.y≈462 永不成立）
+    if (Math.abs(this.player.view.x - 480) < 54) {
       this.orbTouched = true;
       this.player.freeze();
       this.sfx.enter();
@@ -588,12 +699,13 @@ export default class RoomScene extends Phaser.Scene {
   // ---------- HUD / 面板公共件 ----------
 
   private buildHud(): void {
+    // 210：盖过谜题面板的暗幕（200），时钟答错的提示才看得见
     this.hudLayer = this.add
       .container(0, 0)
       .setScrollFactor(0)
-      .setDepth(100)
+      .setDepth(210)
       .setScale(HD_SCALE);
-    this.hintText = this.add.text(16, 14, 'A/D 走动 · 点击房间里的物件', {
+    this.hintText = this.add.text(16, 14, '', {
       fontFamily: 'sans-serif',
       fontSize: '15px',
       color: '#f4f9f2',
@@ -601,6 +713,7 @@ export default class RoomScene extends Phaser.Scene {
       padding: { x: 10, y: 6 },
     });
     this.hudLayer.add(this.hintText);
+    this.showHint('A/D 走动 · 点击房间里的物件', 4500);
 
     FRAGMENT_KINDS.forEach((kind, i) => {
       const icon = this.add.container(838 + i * 44, 28).setVisible(false);
@@ -623,10 +736,17 @@ export default class RoomScene extends Phaser.Scene {
     });
   }
 
-  private showHint(message: string): void {
-    this.hintText.setText(message).setColor('#ffe9a8');
-    this.time.delayedCall(2600, () => {
-      this.hintText.setText('A/D 走动 · 点击房间里的物件').setColor('#f4f9f2');
+  /** 提示显示一段时间后自动淡出（与森林的区域提示一致，不再常驻） */
+  private showHint(message: string, holdMs = 3000): void {
+    this.hintTimer?.remove();
+    this.hintFade?.remove();
+    this.hintText.setText(message).setColor('#ffe9a8').setAlpha(1);
+    this.hintTimer = this.time.delayedCall(holdMs, () => {
+      this.hintFade = this.tweens.add({
+        targets: this.hintText,
+        alpha: 0,
+        duration: 600,
+      });
     });
   }
 
