@@ -3,7 +3,8 @@ import { Player } from '../gameplay/Player';
 import { Terrain } from '../gameplay/Terrain';
 import { Effects } from '../gameplay/Effects';
 import { Sfx } from '../systems/Sfx';
-import { applyHDCamera, HD_SCALE, BASE_WIDTH, BASE_HEIGHT } from '../systems/Resolution';
+import { applyHDCamera, HD_SCALE } from '../systems/Resolution';
+import { showForestLoadingUI } from '../ui/ForestLoadingUI';
 import { Vine } from '../gameplay/Vine';
 import { Flower } from '../gameplay/Flower';
 
@@ -58,21 +59,7 @@ export default class ForestScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // 极简加载条：背景/音频有数 MB，避免点击开始后无反馈的“卡住”感。
-    // 注意 preload 阶段相机尚未做高清补偿（applyHDCamera 在 create），
-    // 视口就是画布尺寸 BASE×HD，UI 按画布中心摆放。
-    const cx = BASE_WIDTH * HD_SCALE / 2;
-    const cy = BASE_HEIGHT * HD_SCALE / 2;
-    const barWidth = 420 * HD_SCALE;
-    const barBg = this.add.rectangle(cx, cy, barWidth, 10 * HD_SCALE, 0x1c2f26);
-    const bar = this.add.rectangle(cx - barWidth / 2, cy, 0, 6 * HD_SCALE, GOLD).setOrigin(0, 0.5);
-    this.load.on('progress', (v: number) => {
-      bar.width = barWidth * v;
-    });
-    this.load.once('complete', () => {
-      barBg.destroy();
-      bar.destroy();
-    });
+    showForestLoadingUI(this);
 
     const base = 'assets/character/';
     this.load.spritesheet('char-yuyu-idle', `${base}char-yuyu-idle-right-96x112-4f.png`, {
