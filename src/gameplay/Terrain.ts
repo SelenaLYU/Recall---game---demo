@@ -35,6 +35,12 @@ const GRASS_LIP = 12;
 /** 台阶最大上升高度，越小越顺滑 */
 const MAX_STEP_RISE = 14;
 
+/** B 交付的可平铺贴图（存在则优先使用，否则程序绘制） */
+const TEXTURE = {
+  ground: 'env-jasmine-ground',
+  float: 'env-jasmine-platform',
+} as const;
+
 /**
  * 地形构建：碰撞与画面分离——Arcade 静态碰撞体隐藏不渲染，
  * 在相同坐标单独绘制「草皮亮边 + 土层 + 根系」（可站立表面的统一识别线）。
@@ -92,32 +98,21 @@ export class Terrain {
     }
   }
 
-  /** 厚地面：土层渐变 + 统一草皮亮边 + 草叶 + 根系 */
+  /** 厚地面：茉莉花篱笆顶面（B 贴图）+ 土层渐变 + 碎石 + 根系；无贴图时退回程序绘制 */
   private drawGround(x: number, y: number, width: number, height: number): void {
     const g = this.scene.add.graphics();
-    // 土层（草皮以下）
+    // 土层（草皮以下，从篱笆下缘开始）
     g.fillGradientStyle(COLORS.soilTop, COLORS.soilTop, COLORS.soilDeep, COLORS.soilDeep, 1);
-    g.fillRect(x, y + GRASS_LIP, width, height - GRASS_LIP);
+    g.fillRect(x, y + 34, width, Math.max(6, height - 34));
     // 碎石肌理
-    for (let ty = y + GRASS_LIP + 18; ty < y + height - 10; ty += 30) {
+    for (let ty = y + 52; ty < y + height - 10; ty += 30) {
       for (let tx = x + 16 + ((ty * 13) % 22); tx < x + width - 10; tx += 27) {
         const dark = (tx + ty) % 2 === 0;
         g.fillStyle(dark ? COLORS.soilSpeckle : COLORS.soilSpeckleLight, 0.55);
         g.fillCircle(tx, ty, dark ? 2.2 : 1.7);
       }
     }
-    // 草皮 + 统一亮边（落脚识别线）
-    g.fillStyle(COLORS.grass, 1);
-    g.fillRect(x, y, width, GRASS_LIP);
-    g.fillStyle(COLORS.grassEdge, 1);
-    g.fillRect(x, y, width, 3);
-    // 草叶
-    g.fillStyle(COLORS.grassBlade, 1);
-    for (let tx = x + 14; tx < x + width - 8; tx += 54) {
-      const h = 5 + ((tx * 7) % 6);
-      g.fillTriangle(tx - 2, y + 3, tx + 2, y + 3, tx, y + 3 - h);
-    }
-    // 根系：从草皮下垂的短根
+    // 根系：从顶面下垂的短根
     g.lineStyle(2, COLORS.root, 0.75);
     for (let rx = x + 40; rx < x + width - 20; rx += 88) {
       const depth = 26 + ((rx * 11) % 22);
@@ -131,10 +126,36 @@ export class Terrain {
       g.lineTo(rx + 10, y + GRASS_LIP + depth * 0.62);
       g.strokePath();
     }
+
+    if (this.scene.textures.exists(TEXTURE.ground)) {
+      // 茉莉花篱笆顶面：顶部高出碰撞线 8px，角色脚踩进花丛； TileSprite 平铺
+      const hedge = this.scene.add
+        .tileSprite(x, y - 8, width, 52, TEXTURE.ground)
+        .setOrigin(0, 0);
+      hedge.setTileScale(0.236, 0.236);
+    } else {
+      g.fillStyle(COLORS.grass, 1);
+      g.fillRect(x, y, width, GRASS_LIP);
+      g.fillStyle(COLORS.grassEdge, 1);
+      g.fillRect(x, y, width, 3);
+      g.fillStyle(COLORS.grassBlade, 1);
+      for (let tx = x + 14; tx < x + width - 8; tx += 54) {
+        const h = 5 + ((tx * 7) % 6);
+        g.fillTriangle(tx - 2, y + 3, tx + 2, y + 3, tx, y + 3 - h);
+      }
+    }
   }
 
-  /** 薄浮空平台：圆角草板 + 四周亮边 + 顶部草叶 */
+  /** 薄浮空平台：茉莉花板贴图（B）；无贴图时退回圆角草板 */
   private drawFloat(x: number, y: number, width: number, height: number): void {
+    if (this.scene.textures.exists(TEXTURE.float)) {
+      // 花板略宽于碰撞体（两侧各探出 8px），顶面与碰撞线齐平
+      const board = this.scene.add
+        .tileSprite(x - 8, y - 6, width + 16, 52, TEXTURE.float)
+        .setOrigin(0, 0);
+      board.setTileScale(0.36, 0.36);
+      return;
+    }
     const g = this.scene.add.graphics();
     g.fillStyle(COLORS.grass, 1);
     g.fillRoundedRect(x, y, width, height, 6);

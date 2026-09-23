@@ -26,6 +26,8 @@ export class Vine {
   private readonly minLength: number;
   private readonly maxLength: number;
   private readonly visual: Phaser.GameObjects.Graphics;
+  /** 茉莉藤蔓贴图身体（跟随摆角旋转、绳长缩放；无贴图时退回线条绘制） */
+  private readonly bodyImage: Phaser.GameObjects.Image | null;
   /** 握点预告光环（玩家接近时亮起，标记可抓范围） */
   private readonly handGlow: Phaser.GameObjects.Ellipse;
   private near = false;
@@ -43,6 +45,9 @@ export class Vine {
     this.minLength = options?.minLength ?? Math.max(110, this.length - 60);
     this.maxLength = options?.maxLength ?? this.length + 30;
     this.visual = scene.add.graphics().setDepth(3);
+    this.bodyImage = scene.textures.exists('env-jasmine-vine')
+      ? scene.add.image(anchorX, anchorY, 'env-jasmine-vine').setOrigin(0.5, 0).setDepth(2)
+      : null;
     this.handGlow = scene.add
       .ellipse(0, 0, 64, 64, 0xf6e7b8, 0.3)
       .setBlendMode(Phaser.BlendModes.ADD)
@@ -141,22 +146,26 @@ export class Vine {
     const handY = this.handY;
     this.handGlow.setPosition(handX, handY);
 
-    // 主茎：带一点弧度（三段折线近似）
-    g.lineStyle(6, 0x3f6b4f, 1);
-    const midX = (this.anchorX + handX) / 2 - Math.sin(this.angle) * 8;
-    const midY = (this.anchorY + handY) / 2;
-    g.beginPath();
-    g.moveTo(this.anchorX, this.anchorY);
-    g.lineTo(midX, midY);
-    g.lineTo(handX, handY);
-    g.strokePath();
-
-    // 叶片沿茎交替分布
-    g.fillStyle(0x4a7a5c, 1);
-    for (const t of [0.3, 0.5, 0.7, 0.88]) {
-      const lx = Phaser.Math.Linear(this.anchorX, handX, t) + (t > 0.5 ? -6 : 6);
-      const ly = Phaser.Math.Linear(this.anchorY, handY, t);
-      g.fillEllipse(lx, ly, 14, 7);
+    if (this.bodyImage) {
+      // 贴图身体：顶端挂在锚点，随摆角旋转、按绳长缩放
+      this.bodyImage.setRotation(-this.angle);
+      this.bodyImage.setDisplaySize(this.length * 0.26, this.length);
+    } else {
+      // 主茎：带一点弧度（三段折线近似）
+      g.lineStyle(6, 0x3f6b4f, 1);
+      const midX = (this.anchorX + handX) / 2 - Math.sin(this.angle) * 8;
+      const midY = (this.anchorY + handY) / 2;
+      g.beginPath();
+      g.moveTo(this.anchorX, this.anchorY);
+      g.lineTo(midX, midY);
+      g.lineTo(handX, handY);
+      g.strokePath();
+      g.fillStyle(0x4a7a5c, 1);
+      for (const t of [0.3, 0.5, 0.7, 0.88]) {
+        const lx = Phaser.Math.Linear(this.anchorX, handX, t) + (t > 0.5 ? -6 : 6);
+        const ly = Phaser.Math.Linear(this.anchorY, handY, t);
+        g.fillEllipse(lx, ly, 14, 7);
+      }
     }
 
     // 末端花环握点：花瓣环 + 亮花心 + 描边圈，明确“这里能抓”
