@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "mimosa-finding-history/v1",
+  "runId": "20260923T122044819Z-27463-1e96a3f2246e",
+  "runStatus": "inconclusive",
+  "errors": [
+    "baseline-read:src/ui/ClockPuzzleUI.ts: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:src/ui/ForestLoadingUI.ts: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:src/ui/FragmentHud.ts: baseline_snapshot_unreadable: file is missing from task baseline"
+  ],
+  "target": ".",
+  "revision": "ea33f5672dad7678e2ec01cebe1cd27255b4cfbb",
+  "diffHash": "12ecf70391bfecf8c8777fdc9f3db70ba7a93472927f82f598b9489fd536ca81",
+  "rulesVersion": "unavailable",
+  "recordedAt": "2026-09-23T12:20:44.819Z",
+  "timing": {
+    "startedAt": "2026-09-23T12:20:44.031Z",
+    "completedAt": "2026-09-23T12:20:44.819Z",
+    "durationMs": 788
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "modelCalls": 0,
+    "measurement": "known-zero"
+  },
+  "findings": {
+    "total": 0,
+    "bySeverity": {},
+    "byStatus": {}
+  },
+  "coverage": {
+    "status": "partial",
+    "reasonCounts": {
+      "baseline_snapshot_unreadable": 3,
+      "project_check_failed": 3
+    }
+  },
+  "evidenceBoundary": "static_only",
+  "immutableReport": ".mimosa/reports/task-review-sess_1ff0f4cc-78ad-4245-ad4e-cd18830ac966-20260923T122044819Z-27463-1e96a3f2246e.json"
+}

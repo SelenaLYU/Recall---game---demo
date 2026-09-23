@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260923T101059958Z-99685-a222329eabe6",
+  "runId": "20260923T101059958Z-99685-a222329eabe6",
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": []
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": "a8159f4c38369378c3d466dd8d7cc0ee23739800",
+  "diffHash": "3ab59fe6575da09185b27e34b03814cd66c7217b63c7487b9bd32eefd50fc1af",
+  "rulesVersion": "unavailable",
+  "sessionHash": "9987ba8cb313bcdcf120ef5b9b144f8c3d8d5c563279bce8ba0e0f51d5d01c7a",
+  "reportRef": ".mimosa/reports/task-review-sess_1ff0f4cc-78ad-4245-ad4e-cd18830ac966-20260923T101059958Z-99685-a222329eabe6.json",
+  "events": [],
+  "observedFindingIds": [
+    "mimosa-b892690de121f7491194c86a"
+  ],
+  "verifiedFiles": [
+    {
+      "file": "src/scenes/RoomScene.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "src/gameplay/Player.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-09-23T10:11:00.155Z"
+}

@@ -481,7 +481,6 @@ export default class RoomScene extends Phaser.Scene {
         .image(0, 0, tileKey)
         .setDisplaySize(cellW, cellH)
         .setInteractive({ useHandCursor: true });
-      const tileScale = img.scaleX;
       const { x, y } = gridXY(pos);
       img.setPosition(x, y);
       layer.add(img);
@@ -527,8 +526,6 @@ export default class RoomScene extends Phaser.Scene {
         // 快速连拖时上一次的回弹/moveTo tween 还在改坐标，会和增量跟随叠加成
         // “块一直飘在指针旁边”的错位——抓起来先杀干净
         this.tweens.killTweensOf(img);
-        // 拖拽手感：抓起的块瞬时微放大“提起来”（7% 幅度用瞬时值，不与位移 tween 抢对象）
-        img.setScale(tileScale * 1.07);
         prevDx = null;
         prevDy = null;
         movedWorld = 0;
@@ -549,8 +546,6 @@ export default class RoomScene extends Phaser.Scene {
         prevDy = dy;
       });
       img.on('dragend', () => {
-        // 松手缩放归位（瞬时值；位移交给落格 tween，互不抢对象）
-        img.setScale(tileScale);
         if (this.puzzleSolved || movedWorld < 8) {
           return; // 纯点击已由 pointerup 处理
         }

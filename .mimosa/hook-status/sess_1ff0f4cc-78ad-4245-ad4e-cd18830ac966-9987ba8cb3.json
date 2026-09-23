@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "mimosa-hook-status/v1",
+  "recordedAt": "2026-09-23T16:05:20.422Z",
+  "sessionId": "sess_1ff0f4cc-78ad-4245-ad4e-cd18830ac966",
+  "event": "PostToolUse",
+  "toolName": "Edit",
+  "file": "src/gameplay/Player.ts",
+  "outcome": "clear",
+  "coverage": "complete",
+  "findingCount": 0,
+  "durationMs": 4,
+  "hostState": "hook_complete",
+  "reportHint": ".mimosa/reports/"
+}

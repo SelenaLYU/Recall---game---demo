@@ -1,0 +1,362 @@
+{
+  "schema_version": "mimosa-task-review/v2",
+  "run_id": "20260922T035751799Z-11779-a5bc0a9e76fc",
+  "run_status": "completed",
+  "errors": [],
+  "coverage": {
+    "schema_version": "mimosa-hook-coverage/v1",
+    "status": "complete",
+    "scope": "hook_observed_diff",
+    "baseline": {
+      "complete": true,
+      "captured_files": 11,
+      "candidate_limit": 5000,
+      "truncated": false,
+      "enumeration_error_count": 0,
+      "snapshot_error_count": 0,
+      "compensated_target_count": 4
+    },
+    "change_tracking": {
+      "touched_observed": 4,
+      "touched_retained": 4,
+      "truncated": false,
+      "bash_mutation": false,
+      "bash_discovered": 0,
+      "bash_discovery_limit": 80,
+      "bash_discovery_truncated": false
+    },
+    "candidates": {
+      "eligible_files": 4,
+      "selected_files": 4,
+      "limit": 20,
+      "truncated": false
+    },
+    "scanning": {
+      "required_files": 3,
+      "scanned_files": 3,
+      "skipped_files": 0,
+      "failed_files": 0,
+      "project_checks_required": 1,
+      "project_checks_completed": 1
+    },
+    "notification": {
+      "eligible_findings": 0,
+      "detailed_findings": 0,
+      "detail_limit": 3,
+      "truncated": false
+    },
+    "reason_counts": {},
+    "reasons": [],
+    "reasons_truncated": false
+  },
+  "generated_at": "2026-09-22T03:57:51.799Z",
+  "session_id": "sess_1ff0f4cc-78ad-4245-ad4e-cd18830ac966",
+  "target": ".",
+  "revision": "9f4be077d2909583f80e6a1447fba7eee210d181",
+  "rules_version": "unavailable",
+  "diff_hash": "fddaa8afaa15ac415aea16a8737acc30279b07f73894c98bbbd5fe7f2c566a00",
+  "diff": {
+    "algorithm": "sha256",
+    "changed_file_count": 4,
+    "changed_files": [
+      {
+        "file": "AGENTS.md",
+        "ranges": [
+          {
+            "start": 31,
+            "end": 31
+          },
+          {
+            "start": 50,
+            "end": 57
+          },
+          {
+            "start": 83,
+            "end": 87
+          },
+          {
+            "start": 89,
+            "end": 92
+          },
+          {
+            "start": 94,
+            "end": 94
+          },
+          {
+            "start": 96,
+            "end": 100
+          }
+        ],
+        "before_hash": "47fbf31ff2fa5a480d78210e499e640fd4c2e43bcac9c840980358e4ef742cf5",
+        "after_hash": "2a7634cc374353a616edfc90545aa3ef6aefd9ec0513306d2043e8172bfa9de9"
+      },
+      {
+        "file": "src/gameplay/Player.ts",
+        "ranges": [
+          {
+            "start": 2,
+            "end": 2
+          },
+          {
+            "start": 6,
+            "end": 12
+          },
+          {
+            "start": 16,
+            "end": 16
+          },
+          {
+            "start": 23,
+            "end": 23
+          },
+          {
+            "start": 29,
+            "end": 33
+          },
+          {
+            "start": 37,
+            "end": 41
+          },
+          {
+            "start": 44,
+            "end": 45
+          },
+          {
+            "start": 51,
+            "end": 53
+          },
+          {
+            "start": 56,
+            "end": 62
+          },
+          {
+            "start": 66,
+            "end": 66
+          },
+          {
+            "start": 68,
+            "end": 72
+          },
+          {
+            "start": 84,
+            "end": 85
+          },
+          {
+            "start": 89,
+            "end": 127
+          },
+          {
+            "start": 146,
+            "end": 146
+          },
+          {
+            "start": 152,
+            "end": 152
+          },
+          {
+            "start": 162,
+            "end": 170
+          },
+          {
+            "start": 184,
+            "end": 187
+          },
+          {
+            "start": 201,
+            "end": 201
+          },
+          {
+            "start": 203,
+            "end": 215
+          },
+          {
+            "start": 217,
+            "end": 217
+          },
+          {
+            "start": 219,
+            "end": 220
+          },
+          {
+            "start": 223,
+            "end": 223
+          },
+          {
+            "start": 227,
+            "end": 227
+          },
+          {
+            "start": 231,
+            "end": 266
+          },
+          {
+            "start": 269,
+            "end": 298
+          }
+        ],
+        "before_hash": "dee9b9a1ac7dbbff8b269d653ecd8d5c6a45a1011f74e15a99464f3a0c87f68c",
+        "after_hash": "c82e842fbbb3ec811974ff79e50af362c7ae73fab6e29ea2bed13403a0a5e37c"
+      },
+      {
+        "file": "src/gameplay/Terrain.ts",
+        "ranges": [
+          {
+            "start": 54,
+            "end": 54
+          },
+          {
+            "start": 59,
+            "end": 59
+          },
+          {
+            "start": 84,
+            "end": 101
+          }
+        ],
+        "before_hash": "de832bd93c057d19b24b0b793dc1ed1fbb710e0129199895fbee9149b5ca807e",
+        "after_hash": "d7b2c529bc2d30e19fed846fb6d5c0fe959b57f87bf8505057478646021932e6"
+      },
+      {
+        "file": "src/scenes/ForestScene.ts",
+        "ranges": [
+          {
+            "start": 4,
+            "end": 5
+          },
+          {
+            "start": 18,
+            "end": 18
+          },
+          {
+            "start": 47,
+            "end": 49
+          },
+          {
+            "start": 51,
+            "end": 52
+          },
+          {
+            "start": 59,
+            "end": 60
+          },
+          {
+            "start": 75,
+            "end": 75
+          },
+          {
+            "start": 77,
+            "end": 77
+          },
+          {
+            "start": 83,
+            "end": 110
+          },
+          {
+            "start": 112,
+            "end": 113
+          },
+          {
+            "start": 122,
+            "end": 122
+          },
+          {
+            "start": 125,
+            "end": 125
+          },
+          {
+            "start": 135,
+            "end": 164
+          },
+          {
+            "start": 181,
+            "end": 183
+          },
+          {
+            "start": 197,
+            "end": 209
+          },
+          {
+            "start": 221,
+            "end": 221
+          },
+          {
+            "start": 236,
+            "end": 236
+          },
+          {
+            "start": 242,
+            "end": 242
+          },
+          {
+            "start": 259,
+            "end": 275
+          },
+          {
+            "start": 289,
+            "end": 290
+          },
+          {
+            "start": 299,
+            "end": 300
+          },
+          {
+            "start": 326,
+            "end": 326
+          }
+        ],
+        "before_hash": "d0c0f28a90ea4362f9c29d0d55b09bb04c136af7944c0b80da21b2bb54bf92f8",
+        "after_hash": "ce2868f979da9785e4f08543e7680691a8c45775041bda77c2c4fd4284036ccb"
+      }
+    ]
+  },
+  "timing": {
+    "started_at": "2026-09-22T03:57:51.110Z",
+    "completed_at": "2026-09-22T03:57:51.799Z",
+    "duration_ms": 689,
+    "measurement": "hook_wall_clock"
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "model_calls": 0,
+    "measurement": "known-zero"
+  },
+  "telemetry": {
+    "schemaVersion": "mimosa-gate-telemetry/v1",
+    "profile": "gate",
+    "operation": "Stop",
+    "outcome": "complete",
+    "latencyMs": 689,
+    "peakMemoryBytes": 193773568,
+    "memoryMeasurement": "max-observed-process-rss",
+    "scannedFiles": 3,
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "measurement": "not-applicable"
+    },
+    "denyCount": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "modelCalls": 0,
+      "measurement": "known-zero"
+    }
+  },
+  "finding_count": 0,
+  "rewake_finding_count": 0,
+  "evidence_boundary": {
+    "scan": "candidate",
+    "static_fix_verification": "observed_static_only",
+    "runtime_verification": "not_performed"
+  },
+  "finding_events": [],
+  "findings": [],
+  "artifacts": {
+    "immutable_report": ".mimosa/reports/task-review-sess_1ff0f4cc-78ad-4245-ad4e-cd18830ac966-20260922T035751799Z-11779-a5bc0a9e76fc.json",
+    "latest_report": ".mimosa/reports/task-review-sess_1ff0f4cc-78ad-4245-ad4e-cd18830ac966.json",
+    "history_summary": ".mimosa/history/run-20260922T035751799Z-11779-a5bc0a9e76fc.json"
+  }
+}

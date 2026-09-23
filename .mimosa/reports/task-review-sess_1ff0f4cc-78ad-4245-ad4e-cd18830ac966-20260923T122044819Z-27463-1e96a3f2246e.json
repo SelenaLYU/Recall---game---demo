@@ -1,0 +1,446 @@
+{
+  "schema_version": "mimosa-task-review/v2",
+  "run_id": "20260923T122044819Z-27463-1e96a3f2246e",
+  "run_status": "inconclusive",
+  "errors": [
+    {
+      "stage": "baseline-read",
+      "target": "src/ui/ClockPuzzleUI.ts",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "src/ui/ForestLoadingUI.ts",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "src/ui/FragmentHud.ts",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    }
+  ],
+  "coverage": {
+    "schema_version": "mimosa-hook-coverage/v1",
+    "status": "partial",
+    "scope": "hook_observed_diff",
+    "baseline": {
+      "complete": true,
+      "captured_files": 20,
+      "candidate_limit": 5000,
+      "truncated": false,
+      "enumeration_error_count": 0,
+      "snapshot_error_count": 0,
+      "compensated_target_count": 7
+    },
+    "change_tracking": {
+      "touched_observed": 7,
+      "touched_retained": 7,
+      "truncated": false,
+      "bash_mutation": true,
+      "bash_discovered": 10,
+      "bash_discovery_limit": 80,
+      "bash_discovery_truncated": false
+    },
+    "candidates": {
+      "eligible_files": 10,
+      "selected_files": 10,
+      "limit": 20,
+      "truncated": false
+    },
+    "scanning": {
+      "required_files": 9,
+      "scanned_files": 9,
+      "skipped_files": 0,
+      "failed_files": 0,
+      "project_checks_required": 1,
+      "project_checks_completed": 1
+    },
+    "notification": {
+      "eligible_findings": 0,
+      "detailed_findings": 0,
+      "detail_limit": 3,
+      "truncated": false
+    },
+    "reason_counts": {
+      "baseline_snapshot_unreadable": 3,
+      "project_check_failed": 3
+    },
+    "reasons": [
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "src/ui/ClockPuzzleUI.ts",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "src/ui/ForestLoadingUI.ts",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "src/ui/FragmentHud.ts",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "src/ui/ClockPuzzleUI.ts",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "src/ui/ForestLoadingUI.ts",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "src/ui/FragmentHud.ts",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      }
+    ],
+    "reasons_truncated": false
+  },
+  "generated_at": "2026-09-23T12:20:44.819Z",
+  "session_id": "sess_1ff0f4cc-78ad-4245-ad4e-cd18830ac966",
+  "target": ".",
+  "revision": "ea33f5672dad7678e2ec01cebe1cd27255b4cfbb",
+  "rules_version": "unavailable",
+  "diff_hash": "12ecf70391bfecf8c8777fdc9f3db70ba7a93472927f82f598b9489fd536ca81",
+  "diff": {
+    "algorithm": "sha256",
+    "changed_file_count": 10,
+    "changed_files": [
+      {
+        "file": "AGENTS.md",
+        "ranges": [
+          {
+            "start": 33,
+            "end": 34
+          },
+          {
+            "start": 41,
+            "end": 44
+          },
+          {
+            "start": 91,
+            "end": 92
+          },
+          {
+            "start": 97,
+            "end": 98
+          },
+          {
+            "start": 121,
+            "end": 121
+          }
+        ],
+        "before_hash": "8316bb63553887f601ae7ba99a0a0da127004a2326da4f5bba69e5b501bc043b",
+        "after_hash": "487ea8f55f81eef4bf0655c51a832e322f4164ab275401f9509551f19ab30471"
+      },
+      {
+        "file": "src/gameplay/Player.ts",
+        "ranges": [
+          {
+            "start": 113,
+            "end": 114
+          },
+          {
+            "start": 366,
+            "end": 367
+          },
+          {
+            "start": 379,
+            "end": 379
+          },
+          {
+            "start": 384,
+            "end": 389
+          },
+          {
+            "start": 429,
+            "end": 436
+          }
+        ],
+        "before_hash": "cbfece11914992103818da3425cfb33b1e504cc57c77009f5f0a216165a7ae90",
+        "after_hash": "5ee9477f5bf8ce6d0c9a7e8f5eb42ef2dc9fca94a74f2ba6de3c138e5ffcc2ab"
+      },
+      {
+        "file": "src/gameplay/Terrain.ts",
+        "ranges": [
+          {
+            "start": 131,
+            "end": 133
+          },
+          {
+            "start": 137,
+            "end": 142
+          },
+          {
+            "start": 158,
+            "end": 173
+          },
+          {
+            "start": 175,
+            "end": 176
+          },
+          {
+            "start": 180,
+            "end": 184
+          }
+        ],
+        "before_hash": "ea79c3cb3732b22063a04d4df101f5999c11176285a812f731f6be8fa204717f",
+        "after_hash": "77868c169b6b0a8497571d061589f0ab24790a25af84e52feab655769eda8e0f"
+      },
+      {
+        "file": "src/gameplay/Vine.ts",
+        "ranges": [
+          {
+            "start": 52,
+            "end": 52
+          }
+        ],
+        "before_hash": "e41f38242fab1681535f6b7a328fc65ae0887fea5cff6365288b33aa8e5f88b2",
+        "after_hash": "861646e818b48a1706a8fdeaf1ae1e14c0f45471f51a6076f13a68c5d3c8e8da"
+      },
+      {
+        "file": "src/main.ts",
+        "ranges": [
+          {
+            "start": 35,
+            "end": 36
+          },
+          {
+            "start": 38,
+            "end": 40
+          },
+          {
+            "start": 47,
+            "end": 49
+          },
+          {
+            "start": 65,
+            "end": 65
+          },
+          {
+            "start": 68,
+            "end": 69
+          },
+          {
+            "start": 72,
+            "end": 72
+          },
+          {
+            "start": 77,
+            "end": 77
+          },
+          {
+            "start": 81,
+            "end": 81
+          }
+        ],
+        "before_hash": "3691a26732f47e92c6a5629638fe2617462e9eb845272ead5a93ee0f25cac6a5",
+        "after_hash": "c1b2f80e192464c551fae941238af1a7e4fcd87e9628097d82158041ca3c3f8f"
+      },
+      {
+        "file": "src/scenes/ForestScene.ts",
+        "ranges": [
+          {
+            "start": 6,
+            "end": 7
+          },
+          {
+            "start": 62,
+            "end": 62
+          },
+          {
+            "start": 203,
+            "end": 204
+          },
+          {
+            "start": 219,
+            "end": 221
+          }
+        ],
+        "before_hash": "25389068fe95490e6e74b0c8f60fcf574306d3b8d2f912c938523ff8b1c837ab",
+        "after_hash": "b26e79be56441cd4d32a542098140956056b653d6ff74829dd82e6d8c66cc016"
+      },
+      {
+        "file": "src/scenes/RoomScene.ts",
+        "ranges": [
+          {
+            "start": 5,
+            "end": 6
+          },
+          {
+            "start": 109,
+            "end": 109
+          },
+          {
+            "start": 148,
+            "end": 149
+          },
+          {
+            "start": 357,
+            "end": 359
+          },
+          {
+            "start": 366,
+            "end": 366
+          },
+          {
+            "start": 386,
+            "end": 404
+          },
+          {
+            "start": 412,
+            "end": 424
+          },
+          {
+            "start": 446,
+            "end": 446
+          },
+          {
+            "start": 491,
+            "end": 501
+          },
+          {
+            "start": 555,
+            "end": 558
+          },
+          {
+            "start": 561,
+            "end": 561
+          },
+          {
+            "start": 573,
+            "end": 573
+          },
+          {
+            "start": 637,
+            "end": 642
+          },
+          {
+            "start": 660,
+            "end": 660
+          },
+          {
+            "start": 678,
+            "end": 678
+          },
+          {
+            "start": 682,
+            "end": 683
+          },
+          {
+            "start": 685,
+            "end": 686
+          },
+          {
+            "start": 691,
+            "end": 694
+          },
+          {
+            "start": 698,
+            "end": 699
+          }
+        ],
+        "before_hash": "9170e52c8c00904f8e7ec2da3f734069ff4951d49823c73d94698fe589cd7cbb",
+        "after_hash": "222d1189f0b1b52b1e9f603c9fc103f9ccd2c93f46fe0b4ca2d539c753101cca"
+      },
+      {
+        "file": "src/ui/ClockPuzzleUI.ts",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 267
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "9fcc70a22c2b61362a53d560e8b55cb71f0735eb56abe6ce3d3378f7e2b1ae2f"
+      },
+      {
+        "file": "src/ui/ForestLoadingUI.ts",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 132
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "67098ab8b25bd8356011d78aee7d9b5a7c371f82368280cf316b1262ecb49f77"
+      },
+      {
+        "file": "src/ui/FragmentHud.ts",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 163
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "90cd40fb1a5d751a6c3e6216fe2439011fb3fd0dc17f080541f8f01df9763a34"
+      }
+    ]
+  },
+  "timing": {
+    "started_at": "2026-09-23T12:20:44.031Z",
+    "completed_at": "2026-09-23T12:20:44.819Z",
+    "duration_ms": 788,
+    "measurement": "hook_wall_clock"
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "model_calls": 0,
+    "measurement": "known-zero"
+  },
+  "telemetry": {
+    "schemaVersion": "mimosa-gate-telemetry/v1",
+    "profile": "gate",
+    "operation": "Stop",
+    "outcome": "partial/INCONCLUSIVE",
+    "latencyMs": 788,
+    "peakMemoryBytes": 204750848,
+    "memoryMeasurement": "max-observed-process-rss",
+    "scannedFiles": 9,
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "measurement": "not-applicable"
+    },
+    "denyCount": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "modelCalls": 0,
+      "measurement": "known-zero"
+    }
+  },
+  "finding_count": 0,
+  "rewake_finding_count": 0,
+  "evidence_boundary": {
+    "scan": "candidate",
+    "static_fix_verification": "observed_static_only",
+    "runtime_verification": "not_performed"
+  },
+  "finding_events": [],
+  "findings": [],
+  "artifacts": {
+    "immutable_report": ".mimosa/reports/task-review-sess_1ff0f4cc-78ad-4245-ad4e-cd18830ac966-20260923T122044819Z-27463-1e96a3f2246e.json",
+    "latest_report": ".mimosa/reports/task-review-sess_1ff0f4cc-78ad-4245-ad4e-cd18830ac966.json",
+    "history_summary": ".mimosa/history/run-20260923T122044819Z-27463-1e96a3f2246e.json"
+  }
+}

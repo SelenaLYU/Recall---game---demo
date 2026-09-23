@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20260923T131952741Z-39518-9a80d4b4d93e",
+  "runId": "20260923T131952741Z-39518-9a80d4b4d93e",
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": []
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": "19e09188ee53b6dfa9c00ec3add5e2e2080b039c",
+  "diffHash": "f50a79f0e0a826a67050ddf8abec5aca47b65c7953511d4bc69e83ef703d9dbe",
+  "rulesVersion": "unavailable",
+  "sessionHash": "9987ba8cb313bcdcf120ef5b9b144f8c3d8d5c563279bce8ba0e0f51d5d01c7a",
+  "reportRef": ".mimosa/reports/task-review-sess_1ff0f4cc-78ad-4245-ad4e-cd18830ac966-20260923T131952741Z-39518-9a80d4b4d93e.json",
+  "events": [],
+  "observedFindingIds": [
+    "mimosa-323433d1c1a74dc7ed1038e9",
+    "mimosa-b892690de121f7491194c86a"
+  ],
+  "verifiedFiles": [
+    {
+      "file": "src/gameplay/Player.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "src/scenes/ForestScene.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "src/scenes/RoomScene.ts",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-09-23T13:19:52.964Z"
+}
