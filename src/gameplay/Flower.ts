@@ -75,19 +75,24 @@ export class Flower {
       this.display = scene.add.container(x, top, [petals, center]).setDepth(2);
     }
 
-    // 待机微摇
-    scene.tweens.add({
-      targets: this.display,
-      angle: { from: -2, to: 2 },
-      duration: 2400 + ((x * 7) % 900),
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
+    // 待机微摇：只给弹跳花（前两朵是静态平台，摇/压会误导"能弹"的预期）
+    if (bouncy) {
+      scene.tweens.add({
+        targets: this.display,
+        angle: { from: -2, to: 2 },
+        duration: 2400 + ((x * 7) % 900),
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
   }
 
-  /** 被踩：花头压扁回弹；弹跳花由场景再给角色速度 */
+  /** 被踩：花头压扁回弹；仅弹跳花有此演出，静态平台无反应 */
   squash(scene: Phaser.Scene): void {
+    if (!this.bouncy) {
+      return;
+    }
     scene.tweens.killTweensOf(this.display);
     this.display.setScale(this.baseScaleX * 1.15, this.baseScaleY * 0.55);
     scene.tweens.add({

@@ -75,8 +75,8 @@ export class Player {
   private static readonly DECEL_AIR = 1400;
   /** 急转变向的额外减速倍率 */
   private static readonly TURN_BOOST = 1.8;
-  /** 下落加重（叠加在世界重力上，共 1.6×），跳跃弧线更漂亮 */
-  private static readonly FALL_GRAVITY_EXTRA = 840;
+  /** 下落加重（叠加在世界重力上，共 1.4×）——此前 1.6× 落地过沉 */
+  private static readonly FALL_GRAVITY_EXTRA = 560;
   private static readonly SKID_DUST_MS = 320;
   /** 跑步脚步声间隔（与 run 动画步频对齐） */
   private static readonly STEP_INTERVAL_MS = 280;
@@ -304,20 +304,17 @@ export class Player {
         ? 'run'
         : 'idle';
 
-    // ---- 落地反馈：只在世界着地那一帧触发，强度随落速 ----
+    // ---- 落地反馈：只在世界着地那一帧触发，强度随落速（白色尘土已按要求移除）----
     if (onGround && !this.wasOnGround) {
-      const feetY = this.view.y + this.opts.height / 2 - 2;
       if (this.prevFallSpeed > this.opts.hardLandThreshold) {
         this.opts.sfx?.land();
-        Effects.dust(this.scene, this.view.x, feetY, 8, 34);
-        this.scene.cameras.main.shake(90, 0.003);
-        this.squash(1.22, 0.76);
+        this.scene.cameras.main.shake(70, 0.002);
+        this.squash(1.14, 0.84);
       } else if (this.prevFallSpeed > this.opts.softLandThreshold) {
         this.opts.sfx?.land();
-        Effects.dust(this.scene, this.view.x, feetY, 5, 22);
-        this.squash(1.12, 0.85);
+        this.squash(1.07, 0.9);
       } else {
-        this.squash(1.05, 0.93);
+        this.squash(1.04, 0.95);
       }
     }
     this.prevFallSpeed = onGround ? 0 : this.body.velocity.y;
@@ -363,8 +360,13 @@ export class Player {
   }
 
   /** 抓藤悬挂时身体中心与握点的距离：让画面上的手正好落在花环处 */
-  /** 抓藤悬挂距离：举手帧的手（sprite 顶端附近）正好扣在花环握点上，头在环下方 */
-  private static readonly VINE_HANG_PX = 42;
+  /** 抓藤悬挂距离：手掌点（抓握帧内实测）到身体中心的竖直距离，手扣在花环上。
+   * 实测：jump 帧 0 举手最高（源 y≈28），27 = 47(顶距中心) − 28×0.72 */
+  private static readonly VINE_HANG_PX = 27;
+  /** 抓握帧手掌相对帧中心的横向偏移（源 65−48=17 × 0.72），用于把手钉在绳轴上 */
+  private static readonly VINE_HAND_OFF_X = 13;
+  /** 抓藤用姿势帧（举手最高的那帧） */
+  private static readonly VINE_GRAB_FRAME = 0;
 
   /** 抓住藤蔓：停用物理体，由藤蔓摆荡驱动位置 */
   attachVine(vine: Vine): void {
@@ -376,15 +378,16 @@ export class Player {
     // 抓住瞬间“收紧”：定格举手帧 + 轻微压缩脉冲，手扣住花环
     this.sprite.anims.stop();
     this.currentAnim = '';
-    this.vinePoseFrame = 2;
-    this.sprite.setTexture('char-yuyu-jump', 2);
+    this.vinePoseFrame = Player.VINE_GRAB_FRAME;
+    this.sprite.setTexture('char-yuyu-jump', Player.VINE_GRAB_FRAME);
     this.squash(1.07, 0.93);
     this.shadow.setAlpha(0.1);
-    // 立刻把手对到握点上、身体对齐绳（不等下一帧，避免“碰巧飘在旁边”的一拍）
+    // 立刻把手掌点对到握点上（不等下一帧，消除“碰巧飘在旁边”的一拍）
     const hang = Player.VINE_HANG_PX;
+    const handOffX = -this.facing * Player.VINE_HAND_OFF_X;
     this.view.setPosition(
-      vine.handX + Math.sin(vine.angle) * hang,
-      vine.handY + Math.cos(vine.angle) * hang,
+      vine.handX + Math.sin(vine.angle) * hang + handOffX * Math.cos(vine.angle),
+      vine.handY + Math.cos(vine.angle) * hang - handOffX * Math.sin(vine.angle),
     );
     this.view.setRotation(-vine.angle);
   }
@@ -426,19 +429,19 @@ export class Player {
       (this.isDown('S') || this.isDown('DOWN') ? 1 : 0);
     vine.update(delta, { dirX, climb });
 
-    // 关键姿势：向上爬=伸展抓高（帧1），静止=抓握（帧2），向下爬=收身下探（帧3）
-    const poseFrame = climb > 0 ? 1 : climb < 0 ? 3 : 2;
+    // 关键姿势：向上爬=伸展抓高（帧1），静止=抓握（抓握帧），向下爬=收身下探（帧3）
+    const poseFrame = climb > 0 ? 1 : climb < 0 ? 3 : Player.VINE_GRAB_FRAME;
     if (poseFrame !== this.vinePoseFrame) {
       this.vinePoseFrame = poseFrame;
       this.sprite.setTexture('char-yuyu-jump', poseFrame);
     }
 
-    // 身体沿“绳的延长线”垂在握点下方（与藤蔓图同一方向），旋转取 −angle 使头朝锚点——
-    // 此前 x 分量镜像 + 旋转反向，人歪在绳旁边，读作“碰巧飘在那儿”
+    // 身体沿“绳的延长线”垂下，手掌点钉在花环握点上（横向偏移一并补偿），旋转 −θ 头朝锚点
     const hang = Player.VINE_HANG_PX;
+    const handOffX = -this.facing * Player.VINE_HAND_OFF_X;
     this.view.setPosition(
-      vine.handX + Math.sin(vine.angle) * hang,
-      vine.handY + Math.cos(vine.angle) * hang,
+      vine.handX + Math.sin(vine.angle) * hang + handOffX * Math.cos(vine.angle),
+      vine.handY + Math.cos(vine.angle) * hang - handOffX * Math.sin(vine.angle),
     );
     this.view.setRotation(-vine.angle);
     if (dirX !== 0) {
