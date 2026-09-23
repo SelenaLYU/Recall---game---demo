@@ -146,22 +146,6 @@ export class Terrain {
 
   /** 薄浮空平台：茉莉花板贴图（B）；无贴图时退回圆角草板 */
   private drawFloat(x: number, y: number, width: number, height: number): void {
-    // 板下的垂草与根须：打破"整齐矩形块"的轮廓，让花板像长出来的
-    const wisps = this.scene.add.graphics();
-    wisps.fillStyle(COLORS.grassBlade, 0.9);
-    for (let i = 0; i < Math.max(3, Math.round(width / 46)); i++) {
-      const wx = x + 12 + (((i * 61 + Math.round(x)) * 13) % Math.max(1, width - 24));
-      const len = 8 + (((i * 29 + Math.round(x)) % 9));
-      wisps.fillTriangle(wx - 2, y + 42, wx + 2, y + 42, wx, y + 42 + len);
-    }
-    wisps.lineStyle(2, COLORS.root, 0.7);
-    for (const sideX of [x + 6, x + width - 6]) {
-      wisps.beginPath();
-      wisps.moveTo(sideX, y + 44);
-      wisps.lineTo(sideX + (sideX < x + width / 2 ? -4 : 4), y + 56);
-      wisps.strokePath();
-    }
-
     if (this.scene.textures.exists(TEXTURE.float)) {
       // 花板略宽于碰撞体（两侧各探出 8px），顶面与碰撞线齐平；缩放/色差微调防重复
       const jitter = (((Math.round(x) * 11) % 5) - 2) / 1000;

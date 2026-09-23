@@ -367,6 +367,9 @@ export default class ForestScene extends Phaser.Scene {
         .image(SLOPE_X0, PLATEAU_TOP - RIDGE_Y0 * SLOPE_SCALE, 'env-flower-slope')
         .setOrigin(0, 0)
         .setScale(SLOPE_SCALE)
+        // 崖沿实际止于素材 x≈1409；右侧还有一道极淡的横向水彩残痕，
+        // 缩放后悬在谷隙上方像"辅助线"——裁掉（2026-09-23 实测定位）
+        .setCrop(0, 0, 1410, 1080)
         .setDepth(0);
     }
     this.terrain.addPlatform({ x: 580, y: 480, width: 100, height: 24, kind: 'float' });
