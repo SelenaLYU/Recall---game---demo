@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { createMenuMemoryBackground } from './MenuMemoryBackground';
+import IntroScene from './scenes/IntroScene';
 import ForestScene from './scenes/ForestScene';
 import RoomScene from './scenes/RoomScene';
 import EndingScene from './scenes/EndingScene';
@@ -28,24 +30,7 @@ class MenuScene extends Phaser.Scene {
     applyHDCamera(this);
     this.cameras.main.setBackgroundColor('#15251f');
 
-    // 背景留出 4% 的边缘余量，轻微移动时不会露出画布底色。
-    const menuBackground = this.add.image(BASE_WIDTH / 2 - 3, BASE_HEIGHT / 2 + 4, 'ui-menu-background')
-      .setDisplaySize(BASE_WIDTH * 1.04, BASE_HEIGHT * 1.04)
-      .setDepth(-20);
-
-    // 18 秒往返一轮：背景缓慢起伏、轻微推近，按钮和文字保持固定。
-    // Tween 属于菜单场景，退出菜单后由 Phaser 自动清理。
-    this.tweens.add({
-      targets: menuBackground,
-      x: BASE_WIDTH / 2 + 3,
-      y: BASE_HEIGHT / 2 - 4,
-      scaleX: menuBackground.scaleX * 1.015,
-      scaleY: menuBackground.scaleY * 1.015,
-      duration: 9000,
-      ease: 'Sine.easeInOut',
-      yoyo: true,
-      repeat: -1,
-    });
+    createMenuMemoryBackground(this);
 
     // 轻压暗背景，并为操作说明加底色，让文字在花海上仍然清楚。
     this.add.rectangle(BASE_WIDTH / 2, BASE_HEIGHT / 2, BASE_WIDTH, BASE_HEIGHT, 0x0b1712, 0.22)
@@ -105,50 +90,6 @@ class MenuScene extends Phaser.Scene {
     button.once('pointerdown', () => {
       this.scene.start('intro');
     });
-  }
-}
-
-// 第二个场景：先为开场动画留出位置
-class IntroScene extends Phaser.Scene {
-  constructor() {
-    super('intro');
-  }
-
-  create() {
-    applyHDCamera(this);
-    this.cameras.main.setBackgroundColor('#10151c');
-
-    this.add.text(480, 230, '开场动画', {
-      fontSize: '36px',
-      color: '#e6cf97',
-    }).setOrigin(0.5);
-
-    this.add.text(480, 295, '动画占位画面', {
-      fontSize: '20px',
-      color: '#b8c2cc',
-    }).setOrigin(0.5);
-
-    const back = this.add.text(480, 420, '进入森林', {
-      fontSize: '22px',
-      color: '#ffffff',
-      padding: { x: 16, y: 12 },
-    }).setOrigin(0.5);
-
-        back.setInteractive({ useHandCursor: true });
-
-        // 避免按钮和计时器重复切换场景
-    let leaving = false;
-
-    const enterForest = () => {
-      if (leaving) return;
-      leaving = true;
-      this.scene.start('forest');
-    };
-
-    // 暂时用 3 秒等待模拟动画，之后改成视频播完再进入
-    this.time.delayedCall(3000, enterForest);
-
-    back.once('pointerdown', enterForest);
   }
 }
 
