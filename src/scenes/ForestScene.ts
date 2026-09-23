@@ -402,13 +402,13 @@ export default class ForestScene extends Phaser.Scene {
     this.physics.add.existing(this.medicineZone, true);
     this.physics.add.overlap(this.player.view, this.medicineZone, () => this.collectMedicine());
 
-    // 钥匙（高台右侧）
+    // 钥匙（高台右侧）：放大一档、缓慢摇曳，像挂在风里的信物
     const keyX = 2290;
     const keyY = 185;
     this.keyVisual = this.add.container(keyX, keyY).setDepth(6);
-    const glow = this.add.ellipse(0, 0, 64, 64, GOLD, 0.18);
+    const glow = this.add.ellipse(0, 0, 78, 78, GOLD, 0.2);
     const keyDisplay: Phaser.GameObjects.GameObject = this.textures.exists('item-golden-key')
-      ? this.add.image(0, 0, 'item-golden-key').setScale(0.28)
+      ? this.add.image(0, 0, 'item-golden-key').setScale(0.36)
       : (() => {
           const keyGraphic = this.add.graphics();
           keyGraphic.lineStyle(4, GOLD, 1);
@@ -434,6 +434,14 @@ export default class ForestScene extends Phaser.Scene {
       targets: this.keyVisual,
       y: keyY - 10,
       duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+    this.tweens.add({
+      targets: this.keyVisual,
+      angle: { from: -7, to: 7 },
+      duration: 1700,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
@@ -501,7 +509,8 @@ export default class ForestScene extends Phaser.Scene {
       fontFamily: 'sans-serif',
       fontSize: '15px',
       color: '#f4f9f2',
-      backgroundColor: 'rgba(6, 14, 10, 0.62)',
+      // 深色底牌保证任何背景上可读；按键统一「」键帽写法
+      backgroundColor: 'rgba(9, 20, 15, 0.8)',
       padding: { x: 10, y: 6 },
     });
     this.hudLayer.add(this.hintText);
@@ -555,9 +564,9 @@ export default class ForestScene extends Phaser.Scene {
     if (this.hasKey) {
       message = '跳下高台 · 找花门离开';
     } else if (x < 860) {
-      message = 'A/D 移动 · 空格跳（空中可再跳）';
+      message = '「A / D」移动　「空格」跳（空中可再跳）';
     } else if (x < 1500) {
-      message = '抓住花环 · A/D 摆荡 · 空格甩出';
+      message = '抓住花环　「A / D」摆荡　「空格」甩出';
     } else {
       message = '踩大花前进 · 第三朵会高弹';
     }
@@ -676,14 +685,17 @@ export default class ForestScene extends Phaser.Scene {
     this.revealHudIcon(this.hudKey);
     this.showHint('拿到了钥匙，下方出现了门');
 
-    this.doorVisual.setVisible(true).setAlpha(0).setScale(0.6, 0.8);
+    // 门出现：从地里“长”出来——下移 16px 起步、Back 回弹归位，基座扬尘 + 光环
+    this.doorVisual.setVisible(true).setAlpha(0).setScale(0.6, 0.8).setY(GROUND_TOP + 16);
     this.sfx.door();
     Effects.ring(this, 2620, GROUND_TOP - 58);
+    Effects.dust(this, 2620, GROUND_TOP - 6, 10, 26);
     this.tweens.add({
       targets: this.doorVisual,
       alpha: 1,
       scaleX: 1,
       scaleY: 1,
+      y: GROUND_TOP,
       duration: 600,
       ease: 'Back.easeOut',
       onComplete: () => {

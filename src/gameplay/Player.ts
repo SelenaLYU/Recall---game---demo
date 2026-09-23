@@ -380,13 +380,13 @@ export class Player {
     this.sprite.setTexture('char-yuyu-jump', 2);
     this.squash(1.07, 0.93);
     this.shadow.setAlpha(0.1);
-    this.view.setRotation(0);
-    // 立刻把手对到握点上（不等下一帧，避免“碰巧飘在旁边”的一拍）
+    // 立刻把手对到握点上、身体对齐绳（不等下一帧，避免“碰巧飘在旁边”的一拍）
     const hang = Player.VINE_HANG_PX;
     this.view.setPosition(
-      vine.handX - Math.sin(vine.angle) * hang,
+      vine.handX + Math.sin(vine.angle) * hang,
       vine.handY + Math.cos(vine.angle) * hang,
     );
+    this.view.setRotation(-vine.angle);
   }
 
   /** 松手甩出：按藤蔓当前摆速的切向速度 + 向上助力 */
@@ -433,13 +433,14 @@ export class Player {
       this.sprite.setTexture('char-yuyu-jump', poseFrame);
     }
 
-    // 双手抓在握点上（手=悬挂点，头在环下方），随摆角倾斜成钟摆
+    // 身体沿“绳的延长线”垂在握点下方（与藤蔓图同一方向），旋转取 −angle 使头朝锚点——
+    // 此前 x 分量镜像 + 旋转反向，人歪在绳旁边，读作“碰巧飘在那儿”
     const hang = Player.VINE_HANG_PX;
     this.view.setPosition(
-      vine.handX - Math.sin(vine.angle) * hang,
+      vine.handX + Math.sin(vine.angle) * hang,
       vine.handY + Math.cos(vine.angle) * hang,
     );
-    this.view.setRotation(vine.angle);
+    this.view.setRotation(-vine.angle);
     if (dirX !== 0) {
       this.facing = dirX > 0 ? 1 : -1;
       this.displayedFacing = this.facing;
@@ -532,7 +533,12 @@ export class Player {
       }
       this.playAnim(this.groundAnim);
       if (this.groundAnim === 'yuyu-run') {
-        this.stepTimer -= delta;
+        // 跑步动画随实际速度变频（起步慢、全速快），脚步声同步用同一系数
+        const rate = Phaser.Math.Linear(0.75, 1.35, speedRatio);
+        if (this.sprite.anims.isPlaying) {
+          this.sprite.anims.timeScale = rate;
+        }
+        this.stepTimer -= delta * rate;
         if (this.stepTimer <= 0) {
           this.stepTimer = Player.STEP_INTERVAL_MS;
           this.opts.sfx?.step();
@@ -550,6 +556,13 @@ export class Player {
     if (!onGround && !this.squashing) {
       const targetY = 1 + Math.min(0.1, Math.max(0, this.body.velocity.y - 150) / 5500);
       this.view.scaleY += (targetY - this.view.scaleY) * Math.min(1, delta * 0.01);
+    }
+
+    // 前倾：地面跑动时身体向移动方向倾约 4–6°，起步浅、全速深；空中/抓藤回正
+    //（挂在 view 上而非 sprite，避开二段跳空翻 tween；抓藤时由绳角接管旋转）
+    if (!this.attachedVine) {
+      const leanTarget = onGround ? this.facing * speedRatio * 0.1 : 0;
+      this.view.rotation += (leanTarget - this.view.rotation) * Math.min(1, delta * 0.008);
     }
   }
 
