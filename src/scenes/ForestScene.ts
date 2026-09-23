@@ -28,7 +28,6 @@ import forestBgmUrl from '../../assets/audio/forest-bgm.mp3?url';
 const WORLD_WIDTH = 2880;
 const WORLD_HEIGHT = 640;
 const GROUND_TOP = 560;
-const PLATEAU_TOP = 386;
 /** 掉出地图判定线（世界下界之外） */
 const KILL_Y = 800;
 /** 弹跳花的弹起速度 */
@@ -374,35 +373,8 @@ export default class ForestScene extends Phaser.Scene {
   private buildTerrain(): void {
     this.terrain = new Terrain(this);
     // 开场保持平地起手（2026-09-23 按需求撤除开场花坡：13px 台阶对 Arcade 是墙，
-    // 走回去会被卡住；坡道台阶能力与素材保留，见 AGENTS §5）
+    // 走回去会被卡住；D 的 PR #57 合并时坡被带回，再次移除——坡道台阶能力与素材保留）
     this.terrain.addPlatform({ x: 0, y: GROUND_TOP, width: 820, height: 80 });
-    // 开场花坡：出生高台（顶 386）→ 沿花坡素材崖沿曲线下行到主地面。
-    // 台阶按素材实测崖沿采样（每段 ≤13px），视觉用崖沿贴图而非直线草带
-    const RIDGE: Array<[number, number]> = [
-      [0, 323], [50, 334], [100, 336], [150, 341], [200, 342], [250, 357], [300, 363],
-      [350, 363], [400, 380], [450, 397], [500, 413], [550, 430], [600, 455], [650, 486],
-      [700, 515], [750, 544], [800, 573], [850, 598], [900, 616], [950, 641], [1000, 660],
-      [1050, 687], [1100, 705], [1150, 719], [1200, 736], [1250, 737], [1300, 745],
-      [1350, 750], [1400, 759],
-    ];
-    const SLOPE_X0 = 150;
-    const SLOPE_SCALE = 0.4;
-    const RIDGE_Y0 = 323;
-    this.terrain.addPlatform({ x: 0, y: PLATEAU_TOP, width: SLOPE_X0, height: GROUND_TOP - PLATEAU_TOP + 80 });
-    this.terrain.addStepSlope(
-      RIDGE.map(([sx, sy]) => ({
-        x: SLOPE_X0 + sx * SLOPE_SCALE,
-        top: PLATEAU_TOP + (sy - RIDGE_Y0) * SLOPE_SCALE,
-      })),
-      GROUND_TOP + 80,
-    );
-    if (this.textures.exists('env-flower-slope')) {
-      this.add
-        .image(SLOPE_X0, PLATEAU_TOP - RIDGE_Y0 * SLOPE_SCALE, 'env-flower-slope')
-        .setOrigin(0, 0)
-        .setScale(SLOPE_SCALE)
-        .setDepth(0);
-    }
     this.terrain.addPlatform({ x: 580, y: 480, width: 100, height: 24, kind: 'float' });
     this.terrain.addPlatform({ x: 750, y: 440, width: 110, height: 24, kind: 'float' });
     // 第一根藤蔓下的练习落脚台：抓取失误不致死，可跳回左侧重试
@@ -428,7 +400,7 @@ export default class ForestScene extends Phaser.Scene {
 
   private buildPlayer(): void {
     this.sfx = new Sfx(this);
-    this.player = new Player(this, { x: 75, y: PLATEAU_TOP - 30, sfx: this.sfx });
+    this.player = new Player(this, { x: 120, y: 500, sfx: this.sfx });
     this.physics.add.collider(this.player.view, this.terrain.solids);
   }
 
