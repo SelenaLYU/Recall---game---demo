@@ -124,7 +124,7 @@ export default class RoomScene extends Phaser.Scene {
     const floor = this.add.rectangle(480, FLOOR_TOP + 24, ROOM_WIDTH, 48, 0xffffff, 0).setVisible(false);
     this.physics.add.existing(floor, true);
 
-    this.sfx = new Sfx(this);
+    this.sfx = new Sfx(this, { ambient: false }); // 室内：无风声鸟鸣
     this.player = new Player(this, { x: 90, y: FLOOR_TOP - 30, speed: 200, sfx: this.sfx });
     this.physics.add.collider(this.player.view, floor);
 

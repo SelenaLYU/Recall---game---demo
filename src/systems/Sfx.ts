@@ -26,10 +26,16 @@ export class Sfx {
   private wind: WindNodes | null = null;
   private birdTimer: Phaser.Time.TimerEvent | null = null;
 
-  constructor(private readonly scene: Phaser.Scene) {
+  constructor(
+    private readonly scene: Phaser.Scene,
+    options?: { ambient?: boolean },
+  ) {
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroy());
     scene.events.once(Phaser.Scenes.Events.DESTROY, () => this.destroy());
-    this.startAmbient();
+    // 森林等户外场景开氛围音；室内（房间）传 { ambient: false } 关闭
+    if (options?.ambient !== false) {
+      this.startAmbient();
+    }
   }
 
   jump(): void {
