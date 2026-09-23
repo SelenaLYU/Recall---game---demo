@@ -67,8 +67,24 @@ export class Terrain {
     }
   }
 
-  addSlope(def: SlopeDef): void {
-    const steps = Math.max(6, Math.ceil(def.drop / MAX_STEP_RISE));
+  /** 采样台阶坡：按坡面素材的崖沿曲线（世界坐标点列）生成一串隐藏台阶，
+   * 上升/下降每段 ≤16px；画面由场景把坡面素材铺在台阶角点连线上。 */
+  addStepSlope(points: Array<{ x: number; top: number }>, bottom: number): void {
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i];
+      const b = points[i + 1];
+      const width = Math.ceil(b.x - a.x) + 1;
+      const height = Math.max(8, bottom - a.top);
+      const rect = this.scene.add
+        .rectangle(a.x, a.top, width, height, COLORS.soilTop)
+        .setOrigin(0, 0)
+        .setVisible(false);
+      this.scene.physics.add.existing(rect, true);
+      this.solids.push(rect);
+    }
+  }
+
+  addSlope(def: SlopeDef): void {    const steps = Math.max(6, Math.ceil(def.drop / MAX_STEP_RISE));
     const stepWidth = def.width / steps;
     for (let i = 0; i < steps; i++) {
       const topY = def.y + (def.drop * i) / steps;

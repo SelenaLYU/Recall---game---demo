@@ -185,3 +185,6 @@ game.scale.on(Phaser.Scale.Events.RESIZE, () => {
   window.clearTimeout(syncBufferTimer);
   syncBufferTimer = window.setTimeout(syncRenderBuffer, 150);
 });
+if (import.meta.env.DEV) {
+  (window as unknown as Record<string, unknown>).__game = game;
+}

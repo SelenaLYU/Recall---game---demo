@@ -497,11 +497,23 @@ export default class RoomScene extends Phaser.Scene {
           (at % 4 === b % 4 && Math.abs(Math.floor(at / 4) - Math.floor(b / 4)) === 1);
         if (adjacent) {
           moveTo(tile, img, b);
+        } else {
+          // 非相邻：轻微推移反馈（这格点不出滑动，但按下有响应）
+          this.tweens.killTweensOf(img);
+          this.tweens.add({ targets: img, x: img.x + 4, duration: 55, yoyo: true, repeat: 1 });
         }
       };
 
+      // 纯点击必须有独立处理：不移动指针时 Phaser 不发 drag 事件，
+      // 挂在 dragend 上的"点击分支"永远不执行（此前"点击没反应"的根因）
+      img.on('pointerup', () => {
+        if (movedWorld < 8) {
+          slideIntoBlank();
+        }
+      });
+
       // 拖拽用 Phaser 原生 drag（dragX/dragY 是世界坐标，不受动态缓冲的画布像素影响）：
-      // 自由拖到任意格子松手即换位（必可完成）；几乎没动 = 点击 → 滑入空格
+      // 自由拖到任意格子松手即换位（必可完成）
       this.input.setDraggable(img);
       let dragOffX = 0;
       let dragOffY = 0;
@@ -525,12 +537,8 @@ export default class RoomScene extends Phaser.Scene {
         img.setPosition(nx, ny);
       });
       img.on('dragend', () => {
-        if (this.puzzleSolved) {
-          return;
-        }
-        if (movedWorld < 8) {
-          slideIntoBlank();
-          return;
+        if (this.puzzleSolved || movedWorld < 8) {
+          return; // 纯点击已由 pointerup 处理
         }
         const col = Phaser.Math.Clamp(Math.round((img.x - boardX - cellW / 2) / cellW), 0, 3);
         const row = Phaser.Math.Clamp(Math.round((img.y - boardY - cellH / 2) / cellH), 0, 3);
