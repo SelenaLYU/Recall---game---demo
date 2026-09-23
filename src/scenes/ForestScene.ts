@@ -3,7 +3,7 @@ import { Player } from '../gameplay/Player';
 import { Terrain } from '../gameplay/Terrain';
 import { Effects } from '../gameplay/Effects';
 import { Sfx } from '../systems/Sfx';
-import { applyHDCamera, HD_SCALE } from '../systems/Resolution';
+import { applyHDCamera, HD_SCALE, BASE_WIDTH, BASE_HEIGHT } from '../systems/Resolution';
 import { Vine } from '../gameplay/Vine';
 import { Flower } from '../gameplay/Flower';
 
@@ -58,6 +58,22 @@ export default class ForestScene extends Phaser.Scene {
   }
 
   preload(): void {
+    // 极简加载条：背景/音频有数 MB，避免点击开始后无反馈的“卡住”感。
+    // 注意 preload 阶段相机尚未做高清补偿（applyHDCamera 在 create），
+    // 视口就是画布尺寸 BASE×HD，UI 按画布中心摆放。
+    const cx = BASE_WIDTH * HD_SCALE / 2;
+    const cy = BASE_HEIGHT * HD_SCALE / 2;
+    const barWidth = 420 * HD_SCALE;
+    const barBg = this.add.rectangle(cx, cy, barWidth, 10 * HD_SCALE, 0x1c2f26);
+    const bar = this.add.rectangle(cx - barWidth / 2, cy, 0, 6 * HD_SCALE, GOLD).setOrigin(0, 0.5);
+    this.load.on('progress', (v: number) => {
+      bar.width = barWidth * v;
+    });
+    this.load.once('complete', () => {
+      barBg.destroy();
+      bar.destroy();
+    });
+
     const base = 'assets/character/';
     this.load.spritesheet('char-yuyu-idle', `${base}char-yuyu-idle-right-96x112-4f.png`, {
       frameWidth: 96,
@@ -156,6 +172,7 @@ export default class ForestScene extends Phaser.Scene {
     this.setupCamera();
     this.buildHud();
     this.buildItemHud();
+    this.buildVignette();
     Effects.fireflies(this, WORLD_WIDTH, 16);
 
     this.cameras.main.fadeIn(250, 23, 56, 43);
@@ -228,6 +245,26 @@ export default class ForestScene extends Phaser.Scene {
       g.fillCircle(x - 15 * scale, GROUND_TOP - trunkHeight + 2 * scale, 18 * scale);
       g.fillCircle(x + 16 * scale, GROUND_TOP - trunkHeight, 19 * scale);
     });
+  }
+
+  /**
+   * 全屏轻暗角：按高清相机实际视口绘制（1920×1080，scrollFactor 0 层 1:1 投影），
+   * 收敛视觉焦点。透明中心不遮画面，边缘最深处 alpha 0.26。
+   */
+  private buildVignette(): void {
+    if (!this.textures.exists('screen-vignette')) {
+      const texture = this.textures.createCanvas('screen-vignette', 1920, 1080);
+      const ctx = texture?.getContext();
+      if (texture && ctx) {
+        const gradient = ctx.createRadialGradient(960, 540, 620, 960, 540, 1160);
+        gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0.26)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 1920, 1080);
+        texture.refresh();
+      }
+    }
+    this.add.image(960, 540, 'screen-vignette').setScrollFactor(0).setDepth(95);
   }
 
   /**
@@ -435,8 +472,8 @@ export default class ForestScene extends Phaser.Scene {
     this.hintText = this.add.text(16, 14, '', {
       fontFamily: 'sans-serif',
       fontSize: '15px',
-      color: '#d3ddd5',
-      backgroundColor: 'rgba(0, 0, 0, 0.33)',
+      color: '#f4f9f2',
+      backgroundColor: 'rgba(6, 14, 10, 0.62)',
       padding: { x: 10, y: 6 },
     });
     this.hudLayer.add(this.hintText);
@@ -463,12 +500,12 @@ export default class ForestScene extends Phaser.Scene {
   }
 
   private showHint(message: string): void {
-    this.hintText.setText(message).setColor('#e6cf97');
+    this.hintText.setText(message).setColor('#ffe9a8');
     this.hintOverrideUntil = this.time.now + 2600;
-    this.time.delayedCall(2600, () => this.hintText.setColor('#d3ddd5'));
+    this.time.delayedCall(2600, () => this.hintText.setColor('#f4f9f2'));
   }
 
-  /** 按所在区域更新操作提示 */
+  /** 按所在区域更新操作提示（短句） */
   private updateHintZone(): void {
     if (this.time.now < this.hintOverrideUntil) {
       return;
@@ -476,13 +513,13 @@ export default class ForestScene extends Phaser.Scene {
     const x = this.player.view.x;
     let message: string;
     if (this.hasKey) {
-      message = '钥匙到手！跳下高台，去土地上找门';
+      message = '跳下高台 · 找花门离开';
     } else if (x < 860) {
-      message = 'A/D 或 ←/→ 移动 · 空格跳跃（空中可再跳一次）';
+      message = 'A/D 移动 · 空格跳（空中可再跳）';
     } else if (x < 1500) {
-      message = '跳向藤蔓抓住 · A/D 摆荡 · W/S 爬 · 空格松手甩出';
+      message = '抓住花环 · A/D 摆荡 · 空格甩出';
     } else {
-      message = '踩着大花前进 · 第三朵会把你弹得很高';
+      message = '踩大花前进 · 第三朵会高弹';
     }
     if (message !== this.hintText.text) {
       this.hintText.setText(message);
