@@ -28,6 +28,7 @@ import forestBgmUrl from '../../assets/audio/forest-bgm.mp3?url';
 const WORLD_WIDTH = 2880;
 const WORLD_HEIGHT = 640;
 const GROUND_TOP = 560;
+const PLATEAU_TOP = 386;
 /** 掉出地图判定线（世界下界之外） */
 const KILL_Y = 800;
 /** 弹跳花的弹起速度 */
@@ -427,7 +428,7 @@ export default class ForestScene extends Phaser.Scene {
 
   private buildPlayer(): void {
     this.sfx = new Sfx(this);
-    this.player = new Player(this, { x: 120, y: 500, sfx: this.sfx });
+    this.player = new Player(this, { x: 75, y: PLATEAU_TOP - 30, sfx: this.sfx });
     this.physics.add.collider(this.player.view, this.terrain.solids);
   }
 
