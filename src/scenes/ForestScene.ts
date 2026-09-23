@@ -212,7 +212,9 @@ export default class ForestScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setScale(1.02)
       .setScrollFactor(0)
-      .setDepth(-9);
+      .setDepth(-9)
+      // 轻微降饱和压亮度，让花海退到“远景”，前景路线/角色成为主次（配合深度雾）
+      .setTint(0xdde8e0);
   }
 
   /** 世界层装饰树（无碰撞，位于角色身后） */
@@ -500,12 +502,24 @@ export default class ForestScene extends Phaser.Scene {
   }
 
   private showHint(message: string): void {
-    this.hintText.setText(message).setColor('#ffe9a8');
+    this.hintText.setText(message).setColor('#ffe9a8').setAlpha(1);
     this.hintOverrideUntil = this.time.now + 2600;
-    this.time.delayedCall(2600, () => this.hintText.setColor('#f4f9f2'));
+    this.time.delayedCall(2600, () => {
+      this.hintText.setColor('#f4f9f2');
+      this.hideHintSoon();
+    });
   }
 
-  /** 按所在区域更新操作提示（短句） */
+  /** 提示短暂停留后淡出，避免长文字一直盖住画面 */
+  private hideHintSoon(delayMs = 1400): void {
+    this.time.delayedCall(delayMs, () => {
+      if (this.time.now >= this.hintOverrideUntil) {
+        this.tweens.add({ targets: this.hintText, alpha: 0, duration: 400 });
+      }
+    });
+  }
+
+  /** 按所在区域更新操作提示（短句）：只在进入新区域时出现，随后自动隐藏 */
   private updateHintZone(): void {
     if (this.time.now < this.hintOverrideUntil) {
       return;
@@ -522,7 +536,10 @@ export default class ForestScene extends Phaser.Scene {
       message = '踩大花前进 · 第三朵会高弹';
     }
     if (message !== this.hintText.text) {
-      this.hintText.setText(message);
+      this.hintText.setText(message).setColor('#f4f9f2');
+      this.tweens.killTweensOf(this.hintText);
+      this.hintText.setAlpha(1);
+      this.hideHintSoon(4000);
     }
   }
 
@@ -542,6 +559,8 @@ export default class ForestScene extends Phaser.Scene {
         body.setVelocityY(FLOWER_BOUNCE);
         this.sfx.bounce();
         Effects.dust(this, onFlower.x, onFlower.top, 8, 30);
+        // 关键瞬间光：弹起时一圈淡粉光环（有来源的动态光，见 AGENTS.md 光影约定）
+        Effects.ring(this, onFlower.x, onFlower.top, 0xf3c2d8);
       } else {
         Effects.dust(this, onFlower.x, onFlower.top, 4, 18);
       }

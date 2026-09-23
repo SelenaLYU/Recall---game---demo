@@ -47,9 +47,9 @@ class MenuScene extends Phaser.Scene {
       fontSize: '22px',
       color: '#d3ddd5',
     }).setOrigin(0.5).setShadow(0, 2, '#0b1712', 4, false, true);
-    this.add.text(480, 440, [
-      '移动：A / D 或 ← / →　跳跃：空格，空中可再跳一次',
-      '空中靠近藤蔓自动抓住：A / D 摆荡，W / S 攀爬，空格松手',
+    // 菜单只保留简短操作说明；藤蔓/花朵操作在森林内按区域提示
+    this.add.text(480, 446, [
+      '移动：A / D 或 ← / →　　跳跃：空格（空中可再跳）',
       '开始与爷爷的记忆之旅吧',
     ], {
       fontSize: '16px',
@@ -70,26 +70,34 @@ class MenuScene extends Phaser.Scene {
       });
     }
 
-    const button = this.add.text(480, 360, '开始游戏', {
-      fontSize: '28px',
-      color: '#ffffff',
-      backgroundColor: '#3a624d',
-      padding: { x: 32, y: 16 },
-    }).setOrigin(0.5);
+    // 开始按钮组件：圆角底板 + 悬停金边/微放大 + 按压回弹
+    const button = this.add.container(480, 360);
+    const plate = this.add
+      .rectangle(0, 0, 224, 64, 0x3a624d, 1)
+      .setStrokeStyle(2, 0x2c4a3a, 1)
+      .setInteractive({ useHandCursor: true });
+    const label = this.add
+      .text(0, 0, '开始游戏', { fontSize: '26px', color: '#ffffff' })
+      .setOrigin(0.5);
+    button.add([plate, label]);
 
-    button.setInteractive({ useHandCursor: true });
-
-    button.on('pointerover', () => {
-      button.setBackgroundColor('#507f63');
+    plate.on('pointerover', () => {
+      plate.setStrokeStyle(2, 0xe6cf97, 1);
+      this.tweens.add({ targets: button, scale: 1.04, duration: 120, ease: 'Quad.easeOut' });
     });
-
-    button.on('pointerout', () => {
-      button.setBackgroundColor('#3a624d');
+    plate.on('pointerout', () => {
+      plate.setStrokeStyle(2, 0x2c4a3a, 1);
+      this.tweens.add({ targets: button, scale: 1, duration: 120, ease: 'Quad.easeOut' });
     });
-
-    button.once('pointerdown', () => {
+    plate.on('pointerdown', () => {
+      this.tweens.add({ targets: button, scale: 0.96, duration: 70 });
+    });
+    // 按压后在按钮区域外松开同样视为点击，避免卡在按压态
+    const startGame = () => {
       this.scene.start('intro');
-    });
+    };
+    plate.once('pointerup', startGame);
+    plate.once('pointerupoutside', startGame);
   }
 }
 
