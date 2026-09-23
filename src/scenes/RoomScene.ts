@@ -126,8 +126,6 @@ export default class RoomScene extends Phaser.Scene {
   private hintFade?: Phaser.Tweens.Tween;
   /** 拼图已解开（锁输入，播完成效果） */
   private puzzleSolved = false;
-  /** 石槽水面中心（playFishSwim 用） */
-  private basinWater: { x: number; y: number } | null = null;
   /** hudLayer 随渲染缓冲重缩放的处理器（场景关闭时解绑） */
   private hudSyncHandler?: () => void;
   /** 记忆球/收音机打开时的动态灯（场景 shutdown 会清空 LightsManager，重启重建） */
@@ -182,7 +180,6 @@ export default class RoomScene extends Phaser.Scene {
     this.hintFade?.remove();
     this.hintTimer = undefined;
     this.hintFade = undefined;
-    this.basinWater = null;
     this.orbLight = undefined;
     this.radioLight = undefined;
     this.puzzleSolved = false;
@@ -262,9 +259,6 @@ export default class RoomScene extends Phaser.Scene {
       }
       const cy = def.anchor === 'bottom' ? def.y - vh / 2 : def.y;
 
-      if (def.kind === 'fish') {
-        this.basinWater = { x: def.x, y: def.y - vh * 0.42 };
-      }
       if (def.shadow) {
         // 只给落地大件一滩很淡的软影；桌面小件靠背景自带的家具明暗，避免贴纸感
         this.add
@@ -308,7 +302,6 @@ export default class RoomScene extends Phaser.Scene {
         this.openDomPanel(() => showFlowerpotText(this));
         break;
       case 'fish':
-        this.playFishSwim();
         this.openDomPanel(() => showFishBasinText(this));
         break;
       case 'photo':
@@ -354,25 +347,6 @@ export default class RoomScene extends Phaser.Scene {
     });
   }
 
-  /** 鱼缸反馈：几尾小鱼贴着石槽水面游过一次 */
-  private playFishSwim(): void {
-    const basin = this.basinWater;
-    if (!basin) return;
-    for (let i = 0; i < 3; i++) {
-      const fish = this.add
-        .ellipse(basin.x - 58 + i * 12, basin.y - 5 + (i % 2) * 9, 15, 6, 0xe8f2e0, 0.85)
-        .setDepth(8.05);
-      this.tweens.add({
-        targets: fish,
-        x: basin.x + 58 - i * 10,
-        duration: 1500 + i * 280,
-        delay: i * 150,
-        yoyo: true,
-        ease: 'Sine.easeInOut',
-        onComplete: () => fish.destroy(),
-      });
-    }
-  }
 
   // ---------- 照片拼图（散件拖放） ----------
 

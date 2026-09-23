@@ -230,7 +230,7 @@ export default class ForestScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(-9)
       // 轻微降饱和压亮度，让花海退到“远景”，前景路线/角色成为主次（配合深度雾）
-      .setTint(0xb9c6bc);
+      .setTint(0xb0bfb4);
     this.sfBackdrop.setScale(1.02 * screenRefScaleOf(this));
   }
 
@@ -247,7 +247,7 @@ export default class ForestScene extends Phaser.Scene {
           .setScale(scale)
           .setDepth(-4)
           // 压暗降透明：树属于背景层，亮度和存在感不得与角色争（此前接近角色导致"贴图感"）
-          .setTint(0xaebab0)
+          .setTint(0xa4b0a6)
           .setAlpha(0.86);
       });
       return;
@@ -329,9 +329,9 @@ export default class ForestScene extends Phaser.Scene {
       const texture = this.textures.createCanvas('depth-fog', 960, 540);
       const ctx = texture?.getContext();
       if (texture && ctx) {
-        const gradient = ctx.createLinearGradient(0, 200, 0, 540);
+        const gradient = ctx.createLinearGradient(0, 130, 0, 540);
         gradient.addColorStop(0, 'rgba(10, 26, 19, 0)');
-        gradient.addColorStop(0.5, 'rgba(10, 26, 19, 0.45)');
+        gradient.addColorStop(0.45, 'rgba(10, 26, 19, 0.5)');
         gradient.addColorStop(1, 'rgba(10, 26, 19, 0.82)');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, 960, 540);
@@ -599,9 +599,7 @@ export default class ForestScene extends Phaser.Scene {
         // 关键瞬间光：弹起时一圈淡粉光环（有来源的动态光，见 AGENTS.md 光影约定）
         Effects.ring(this, onFlower.x, onFlower.top, 0xf3c2d8);
       } else {
-        // 普通花也要"踩到了"的读法：一圈极淡的暖金光环（花本体保持静态、
-        // 不摇不压、无白尘——反馈用光，与金色发光物的语言一致）
-        Effects.ring(this, onFlower.x, onFlower.top, 0xe6cf97);
+        // 普通花反馈只留脚步声（光环 2026-09-24 按需求去除；花本体保持静态）
         this.sfx.step();
       }
     }
