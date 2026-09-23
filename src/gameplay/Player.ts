@@ -343,7 +343,7 @@ export class Player {
 
   /** 自动走位到目标 x（房间点击物件自动走近），到达后回调一次 */
   autoWalkTo(x: number, onArrived?: () => void): void {
-    // 目标收进本场景的可走范围（房间两端有前景花丛挡路），保证真的走得到并触发回调
+    // 目标收进本场景物理边界内，保证真的走得到并触发回调（森林边界覆盖全图，行为不变）
     const bounds = this.scene.physics.world.bounds;
     const minX = Math.max(20, bounds.left + 24);
     const maxX = Math.min(940, bounds.right - 24);
