@@ -569,8 +569,12 @@ export default class ForestScene extends Phaser.Scene {
         this.sfx.bounce();
         // 关键瞬间光：弹起时一圈淡粉光环（有来源的动态光，见 AGENTS.md 光影约定）
         Effects.ring(this, onFlower.x, onFlower.top, 0xf3c2d8);
+      } else {
+        // 普通花也要"踩到了"的读法：一圈极淡的暖金光环（花本体保持静态、
+        // 不摇不压、无白尘——反馈用光，与金色发光物的语言一致）
+        Effects.ring(this, onFlower.x, onFlower.top, 0xe6cf97);
+        this.sfx.step();
       }
-      // 白色尘土已按要求移除（静态花无反应，弹跳花只留光环）
     }
     this.lastFlower = onFlower;
   }
