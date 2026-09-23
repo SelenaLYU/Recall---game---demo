@@ -118,7 +118,7 @@
 - 占位尺寸贴近最终预期（角色碰撞体 28×60），素材到位后换纹理少调数值。
 - 镜头：`startFollow(roundPixels=true, lerp≈0.1)` + `setDeadzone`，保证像素清晰、不抖。
 - **高清渲染**：渲染缓冲 = 逻辑分辨率 × min(devicePixelRatio, 2)（`src/systems/Resolution.ts`），每个场景 `create()` 必须调用 `applyHDCamera(this)`。**不要用 `scale.zoom`**——FIT 模式下不生效（实测 canvas.width 仍为 960）。scrollFactor≠1 或 scrollFactor 0 的装饰层与相机 zoom 组合易错位，新增背景层前先实机截图验证。
-- **屏幕适配**：`scale.autoRound: true`（CSS 位置取整防半像素模糊）；FIT 信箱区底色与游戏底色一致（`index.html` body `#15251f`，`html/body` 固定 `height:100%; overflow:hidden`——页面自身不滚动，FIT 负责等比缩放）；窗口缩放由 ScaleManager 自动处理，无需手动监听。移动端触控仍在红线内，不做。
+- **屏幕适配（定稿）**：`Phaser.Scale.FIT` 等比缩放，**不用 EXPAND/RESIZE**——全部背景素材按 16:9 固定构图绘制，撑满模式会在画外露出相机底色、且改变平台跳跃的可见宽度。`scale.autoRound: true`（CSS 位置取整防半像素模糊）。容器尺寸只走 CSS（`#game` `position:fixed; inset:0`），勿用 JS 设高度；`html/body` 固定 `height:100%; overflow:hidden`，页面自身不滚动。**信箱区颜色由 main.ts 按场景同步**（`SCENE_LETTERBOX`，CREATE 时改 body 背景，index.html 带 0.45s 过渡）——留边读作场景的延伸而不是黑框。DOM 覆盖层（RoomTextPanel/ClockPuzzleUI/FragmentHud/ForestLoadingUI）必须监听 `Scale.Events.RESIZE` 重定位（四个组件均已遵守）。窗口缩放由 ScaleManager 自动处理，无需手动监听。移动端触控仍在红线内，不做。**实机验收**：1366×768 / 1920×1080 / 高像素密度屏各过一遍菜单→森林→房间，拖动窗口大小验证画布、面板、信箱色跟随。
 - **全屏 scrollFactor 0 层**（雾/暗角/HUD）：实际视口 = 1920×1080（1:1 投影），画布纹理必须铺满该尺寸或 `setScale(HD_SCALE)`，否则只显示一角（深度雾曾踩坑）；HUD 统一放 `hudLayer`（scale = HD_SCALE）抵消缩小。
 - **加载与帧率**：森林 preload 带极简加载条（背景/音频数 MB，防止"点击后无响应"感）；全屏 sf0 层控制在 3 层内（背景+雾+暗角）控制 overdraw；Sfx 采样优先、合成回退（`playSample`）；其余实体数量小，无需对象池。
 - 纹理 key 命名：`char-yuyu-*`（角色帧）、`env-*`（环境）、`item-*`（物品），占位纹理以 `placeholder-` 开头，避免和正式素材冲突。
