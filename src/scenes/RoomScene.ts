@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { Player } from '../gameplay/Player';
 import { Sfx } from '../systems/Sfx';
 import { Effects } from '../gameplay/Effects';
 import { applyHDCamera, HD_SCALE } from '../systems/Resolution';
@@ -14,13 +13,10 @@ import photoFrameUrl from '../../assets/environment/interactive-family-zoo-photo
 
 const ROOM_WIDTH = 960;
 const ROOM_HEIGHT = 540;
-/** 前景地板面（角色脚底所在线） */
-const FLOOR_TOP = 492;
-/** 角色可走范围：画面两端是前景花丛，走进去会像站在花里 */
-const WALK_LEFT = 165;
-const WALK_RIGHT = 800;
 
 const GOLD = 0xe6cf97;
+/** 物件整体微降的暖色调：向水彩背景的环境色靠拢，削弱“另一张贴图层”的感觉 */
+const OBJECT_TINT = 0xf2ecdf;
 
 type ObjectKind = 'clock' | 'radio' | 'photo' | 'calendar' | 'pot' | 'fish';
 
@@ -36,9 +32,7 @@ interface RoomObjectDef {
   targetH?: number;
   targetW?: number;
   depth: number;
-  /** 点击后角色走到的位置（须在可走范围内，保证 autoWalk 能到达） */
-  standX: number;
-  /** 桌面/地面接触阴影 */
+  /** 地面接触阴影（仅落地的大件；桌面小件靠背景自带的家具明暗） */
   shadow?: boolean;
 }
 
@@ -46,12 +40,12 @@ interface RoomObjectDef {
  * 挂钟挂后墙书架右侧，收音机在中央方桌桌心，相框在右侧柜面左端，日历立在右前方案几，
  * 花盆/石槽分别落在左右前景花丛里（接地）。 */
 const OBJECT_DEFS: RoomObjectDef[] = [
-  { kind: 'clock', texture: 'room-clock', anchor: 'center', x: 505, y: 234, targetH: 96, depth: 1, standX: 505 },
-  { kind: 'radio', texture: 'room-radio', anchor: 'bottom', x: 505, y: 359, targetH: 40, depth: 1, standX: 505, shadow: true },
-  { kind: 'photo', texture: 'room-photo', anchor: 'bottom', x: 644, y: 302, targetH: 30, depth: 1, standX: 644, shadow: true },
-  { kind: 'calendar', texture: 'room-calendar', anchor: 'bottom', x: 838, y: 340, targetH: 56, depth: 1, standX: 800, shadow: true },
-  { kind: 'pot', texture: 'room-pot', anchor: 'bottom', x: 215, y: 500, targetH: 215, depth: 8, standX: 300 },
-  { kind: 'fish', texture: 'room-fish', anchor: 'bottom', x: 774, y: 527, targetW: 205, depth: 8, standX: 660 },
+  { kind: 'clock', texture: 'room-clock', anchor: 'center', x: 505, y: 234, targetH: 96, depth: 1 },
+  { kind: 'radio', texture: 'room-radio', anchor: 'bottom', x: 505, y: 359, targetH: 40, depth: 1 },
+  { kind: 'photo', texture: 'room-photo', anchor: 'bottom', x: 644, y: 302, targetH: 30, depth: 1 },
+  { kind: 'calendar', texture: 'room-calendar', anchor: 'bottom', x: 838, y: 340, targetH: 56, depth: 1 },
+  { kind: 'pot', texture: 'room-pot', anchor: 'bottom', x: 215, y: 500, targetH: 215, depth: 8, shadow: true },
+  { kind: 'fish', texture: 'room-fish', anchor: 'bottom', x: 774, y: 527, targetW: 205, depth: 8, shadow: true },
 ];
 
 interface VisibleBox {
@@ -110,7 +104,6 @@ function visibleBounds(scene: Phaser.Scene, key: string): VisibleBox {
 const FRAGMENT_KINDS: Array<'photo' | 'radio' | 'clock'> = ['photo', 'radio', 'clock'];
 
 export default class RoomScene extends Phaser.Scene {
-  private player!: Player;
   private sfx!: Sfx;
   private hintText!: Phaser.GameObjects.Text;
   private hudLayer!: Phaser.GameObjects.Container;
@@ -125,15 +118,12 @@ export default class RoomScene extends Phaser.Scene {
   private hintFade?: Phaser.Tweens.Tween;
   /** 石槽水面中心（playFishSwim 用） */
   private basinWater: { x: number; y: number } | null = null;
+  /** 记忆球/收音机打开时的动态灯（场景 shutdown 会清空 LightsManager，重启重建） */
+  private orbLight?: Phaser.GameObjects.Light;
+  private radioLight?: Phaser.GameObjects.Light;
 
   constructor() {
-    super({
-      key: 'room',
-      physics: {
-        default: 'arcade',
-        arcade: { gravity: { x: 0, y: 1400 }, debug: false },
-      },
-    });
+    super('room');
   }
 
   preload(): void {
@@ -151,29 +141,10 @@ export default class RoomScene extends Phaser.Scene {
         this.load.image(key, url);
       }
     }
-    if (!this.textures.exists('char-yuyu-idle')) {
-      const base = 'assets/character/';
-      this.load.spritesheet('char-yuyu-idle', `${base}char-yuyu-idle-right-96x112-4f.png`, {
-        frameWidth: 96,
-        frameHeight: 112,
-      });
-      this.load.spritesheet('char-yuyu-run', `${base}char-yuyu-run-right-96x112-8f.png`, {
-        frameWidth: 96,
-        frameHeight: 112,
-      });
-      this.load.spritesheet('char-yuyu-jump', `${base}char-yuyu-jump-right-96x112-4f.png`, {
-        frameWidth: 96,
-        frameHeight: 112,
-      });
-      this.load.spritesheet('char-yuyu-fall', `${base}char-yuyu-fall-right-96x112-4f.png`, {
-        frameWidth: 96,
-        frameHeight: 112,
-      });
-    }
   }
 
   create(): void {
-    // 场景复用：状态全部重置（AGENTS.md 第 5 节）
+    // 场景复用：状态全部重置（AGENTS.md 第 5 节）；shutdown 会清空 LightsManager，灯光在下面重建
     this.fragments.clear();
     this.fragmentIcons.clear();
     this.memoryOrb = null;
@@ -186,24 +157,28 @@ export default class RoomScene extends Phaser.Scene {
     this.hintTimer = undefined;
     this.hintFade = undefined;
     this.basinWater = null;
+    this.orbLight = undefined;
+    this.radioLight = undefined;
 
     applyHDCamera(this);
-    this.physics.world.setBounds(
-      WALK_LEFT, 0, WALK_RIGHT - WALK_LEFT, ROOM_HEIGHT, true, true, false, false,
-    );
 
-    // 空房间背景铺满（1920×1080 源 0.5 缩放，高清缓冲下 1:1 源像素）
-    this.add.image(0, 0, 'room-bg').setOrigin(0, 0).setScale(0.5).setDepth(0);
+    // 光影（依据 3.90 源码 LightPipeline/Light-frag，相机 zoom 感知、无法线图也能漫反射）：
+    // 只有背景走 Light2D 管线，环境光压一档，再用“有来源”的灯把重点区域点亮；
+    // 物件不切管线保持清晰。WebGL 专属：Canvas 回退时背景按原图渲染、只是无光效，不会黑图。
+    this.lights.enable().setAmbientColor(0xd8d0c0);
+    this.add
+      .image(0, 0, 'room-bg')
+      .setOrigin(0, 0)
+      .setScale(0.5)
+      .setDepth(0)
+      .setPipeline('Light2D');
+    this.lights.addLight(150, 250, 330, 0xbcd4de, 0.35); // 左侧窗外的冷天光
+    this.lights.addLight(505, 320, 300, 0xffe0b0, 0.5); // 方桌上方的暖主光
+    this.lights.addLight(780, 320, 260, 0xffd9a8, 0.28); // 右侧柜面的暖补光
 
-    // 地板碰撞体（隐藏，画面由背景承担）
-    const floor = this.add.rectangle(480, FLOOR_TOP + 24, ROOM_WIDTH, 48, 0xffffff, 0).setVisible(false);
-    this.physics.add.existing(floor, true);
+    this.buildWindowDust();
 
     this.sfx = new Sfx(this, { ambient: false }); // 室内：无风声鸟鸣
-    this.player = new Player(this, { x: 185, y: FLOOR_TOP - 30, speed: 200, sfx: this.sfx });
-    // 深度分层：桌/墙上物件在后（depth 1）< 角色（5）< 前景花盆/石槽（8）
-    this.player.view.setDepth(5);
-    this.physics.add.collider(this.player.view, floor);
 
     this.buildObjects();
     this.buildHud();
@@ -215,12 +190,27 @@ export default class RoomScene extends Phaser.Scene {
     }
   }
 
-  update(_time: number, delta: number): void {
-    this.player.update(delta);
-    this.checkMemoryOrbTouch();
+  /** 窗光里的浮尘：房间没有角色后，画面保有一点缓慢的“活”感 */
+  private buildWindowDust(): void {
+    for (let i = 0; i < 7; i++) {
+      const mote = this.add
+        .ellipse(70 + Math.random() * 210, 150 + Math.random() * 170, 3, 3, 0xfff6df, 0.14)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(0.2);
+      this.tweens.add({
+        targets: mote,
+        x: mote.x + 26,
+        y: mote.y - 44,
+        duration: 6000 + i * 900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+        delay: i * 500,
+      });
+    }
   }
 
-  /** 六个可点击物件：按美术预览落位（可见像素贴家具），悬停金色微光 + 放大点击热区 */
+  /** 六个可点击物件：按美术预览落位（可见像素贴家具），微降色调融入画面 + 极淡悬停微光 */
   private buildObjects(): void {
     for (const def of OBJECT_DEFS) {
       const box = visibleBounds(this, def.texture);
@@ -231,7 +221,11 @@ export default class RoomScene extends Phaser.Scene {
       const vh = vh0 * scale;
       // 把“可见像素”的中心/底部对到锚点（补偿 PNG 透明留白）
       const offX = (box.left + box.right + 1) / 2 - box.w / 2;
-      const img = this.add.image(def.x - offX * scale, 0, def.texture).setScale(scale).setDepth(def.depth);
+      const img = this.add
+        .image(def.x - offX * scale, 0, def.texture)
+        .setScale(scale)
+        .setDepth(def.depth)
+        .setTint(OBJECT_TINT);
       if (def.anchor === 'bottom') {
         img.setOrigin(0.5, 1);
         img.y = def.y + (box.h - 1 - box.bottom) * scale;
@@ -245,13 +239,15 @@ export default class RoomScene extends Phaser.Scene {
         this.basinWater = { x: def.x, y: def.y - vh * 0.42 };
       }
       if (def.shadow) {
+        // 只给落地大件一滩很淡的软影；桌面小件靠背景自带的家具明暗，避免贴纸感
         this.add
-          .ellipse(def.x, def.y + 2, vw * 0.85, 6, 0x0c1512, 0.24)
+          .ellipse(def.x, def.y + 2, vw * 0.8, 9, 0x0c1512, 0.16)
           .setDepth(def.depth - 0.15);
       }
-      // 悬停微光（金色，与钥匙/记忆球同系）+ 放大的隐形热区，视觉尺寸和可点性解耦
+      // 悬停只保留极淡的暖金微光（不再缩放整张图，缩放会暴露“独立图层”）；
+      // 隐形热区与视觉尺寸解耦，小物件也容易点中
       const glow = this.add
-        .ellipse(def.x, cy, Math.max(vw * 1.5, 40), Math.max(vh * 1.25, 36), GOLD, 0)
+        .ellipse(def.x, cy, Math.max(vw * 1.35, 40), Math.max(vh * 1.2, 34), GOLD, 0)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(def.depth - 0.05);
       const hit = this.add
@@ -260,11 +256,9 @@ export default class RoomScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true });
       hit.on('pointerover', () => {
         if (this.interacting) return;
-        img.setScale(scale * 1.04);
-        this.tweens.add({ targets: glow, alpha: 0.26, duration: 140 });
+        this.tweens.add({ targets: glow, alpha: 0.12, duration: 140 });
       });
       hit.on('pointerout', () => {
-        img.setScale(scale);
         this.tweens.add({ targets: glow, alpha: 0, duration: 180 });
       });
       hit.on('pointerdown', () => this.onObjectClicked(def));
@@ -275,13 +269,7 @@ export default class RoomScene extends Phaser.Scene {
     if (this.interacting || this.orbTouched) {
       return;
     }
-    const near = Math.abs(this.player.view.x - def.standX) < 130;
-    if (near) {
-      this.openObject(def.kind);
-    } else {
-      this.player.cancelAutoWalk();
-      this.player.autoWalkTo(def.standX, () => this.openObject(def.kind));
-    }
+    this.openObject(def.kind);
   }
 
   private openObject(kind: ObjectKind): void {
@@ -330,15 +318,12 @@ export default class RoomScene extends Phaser.Scene {
     }
   }
 
-  /** DOM 文字面板（D 的组件）：打开时冻结角色，面板关闭（场景 resume）后解锁 */
+  /** DOM 文字面板（D 的组件）：打开时暂停场景，面板关闭（场景 resume）后解锁交互 */
   private openDomPanel(open: () => { close: () => void }): void {
     this.interacting = true;
-    this.player.cancelAutoWalk();
-    this.player.freeze();
     open();
     this.events.once(Phaser.Scenes.Events.RESUME, () => {
       this.interacting = false;
-      this.player.unfreeze();
     });
   }
 
@@ -366,7 +351,6 @@ export default class RoomScene extends Phaser.Scene {
 
   private openPuzzle(): void {
     this.interacting = true;
-    this.player.freeze();
     const layer = this.add.container(0, 0).setDepth(200);
     this.panel = layer;
 
@@ -466,8 +450,9 @@ export default class RoomScene extends Phaser.Scene {
 
   private openRadio(): void {
     this.interacting = true;
-    this.player.freeze();
     this.pauseRoomBgm(true);
+    // 收音机“发声”时从机身泛出一圈暖光（有来源的光）
+    this.radioLight = this.lights.addLight(505, 335, 210, 0xffc98a, 0.55);
 
     const layer = this.add.container(0, 0).setDepth(200);
     this.panel = layer;
@@ -528,7 +513,6 @@ export default class RoomScene extends Phaser.Scene {
 
   private openClock(): void {
     this.interacting = true;
-    this.player.freeze();
     const layer = this.add.container(0, 0).setDepth(200);
     this.panel = layer;
     const dim = this.add.rectangle(480, 270, ROOM_WIDTH, ROOM_HEIGHT, 0x060e0a, 0.78).setInteractive();
@@ -653,7 +637,11 @@ export default class RoomScene extends Phaser.Scene {
     this.memoryOrb = this.add.container(480, 305).setDepth(6);
     const glow = this.add.ellipse(0, 0, 110, 110, GOLD, 0.2);
     const core = this.add.circle(0, 0, 26, GOLD).setStrokeStyle(3, 0xf6e7b8, 0.9);
-    this.memoryOrb.add([glow, core]);
+    const hit = this.add.circle(0, 0, 44, 0xffffff, 0).setInteractive({ useHandCursor: true });
+    hit.on('pointerdown', () => this.touchMemoryOrb());
+    this.memoryOrb.add([glow, core, hit]);
+    // 球本体也点亮房间（有来源的金色光，随呼吸明暗）
+    this.orbLight = this.lights.addLight(480, 305, 240, GOLD, 0.8);
     this.tweens.add({
       targets: this.memoryOrb,
       y: 291,
@@ -670,30 +658,34 @@ export default class RoomScene extends Phaser.Scene {
       repeat: -1,
       ease: 'Sine.easeInOut',
     });
+    this.tweens.add({
+      targets: this.orbLight,
+      intensity: { from: 0.5, to: 1.0 },
+      duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
     Effects.ring(this, 480, 305);
     this.sfx.door();
-    this.showHint('三块碎片融成了记忆球——走过去触碰它');
+    this.showHint('三块碎片融成了记忆球——点击它');
   }
 
-  private checkMemoryOrbTouch(): void {
-    if (!this.memoryOrb || this.orbTouched || this.interacting) {
+  private touchMemoryOrb(): void {
+    if (!this.memoryOrb || this.orbTouched) {
       return;
     }
-    // 球悬在走道上空，只按横向距离判定（此前 |y-240|<130 对 view.y≈462 永不成立）
-    if (Math.abs(this.player.view.x - 480) < 54) {
-      this.orbTouched = true;
-      this.player.freeze();
-      this.sfx.enter();
-      this.tweens.add({
-        targets: this.memoryOrb,
-        scale: 2.2,
-        alpha: 0,
-        duration: 520,
-        ease: 'Quad.easeOut',
-      });
-      this.cameras.main.fade(520, 23, 45, 35);
-      this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('ending'));
-    }
+    this.orbTouched = true;
+    this.sfx.enter();
+    this.tweens.add({
+      targets: this.memoryOrb,
+      scale: 2.2,
+      alpha: 0,
+      duration: 520,
+      ease: 'Quad.easeOut',
+    });
+    this.cameras.main.fade(520, 23, 45, 35);
+    this.cameras.main.once('camerafadeoutcomplete', () => this.scene.start('ending'));
   }
 
   // ---------- HUD / 面板公共件 ----------
@@ -713,7 +705,7 @@ export default class RoomScene extends Phaser.Scene {
       padding: { x: 10, y: 6 },
     });
     this.hudLayer.add(this.hintText);
-    this.showHint('A/D 走动 · 点击房间里的物件', 4500);
+    this.showHint('点击房间里的物件', 4500);
 
     FRAGMENT_KINDS.forEach((kind, i) => {
       const icon = this.add.container(838 + i * 44, 28).setVisible(false);
@@ -779,7 +771,10 @@ export default class RoomScene extends Phaser.Scene {
     this.panel?.destroy();
     this.panel = null;
     this.interacting = false;
-    this.player.unfreeze();
+    if (this.radioLight) {
+      this.lights.removeLight(this.radioLight);
+      this.radioLight = undefined;
+    }
     this.pauseRoomBgm(false);
   }
 
