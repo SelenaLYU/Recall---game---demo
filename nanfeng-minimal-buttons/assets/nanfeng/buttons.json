@@ -1,0 +1,238 @@
+{
+  "buttons": [
+    {
+      "id": "music-off-warm",
+      "label": "让风轻轻说",
+      "action": "关闭音乐",
+      "file": "assets/nanfeng/buttons/music-off-warm.png",
+      "width": 770,
+      "height": 170,
+      "format": "RGBA PNG",
+      "crop": [
+        127,
+        124,
+        897,
+        294
+      ],
+      "sourceSheet": "reference/button-sheet-01.png"
+    },
+    {
+      "id": "music-on-warm",
+      "label": "把风唱给你",
+      "action": "开启音乐",
+      "file": "assets/nanfeng/buttons/music-on-warm.png",
+      "width": 770,
+      "height": 171,
+      "format": "RGBA PNG",
+      "crop": [
+        127,
+        312,
+        897,
+        483
+      ],
+      "sourceSheet": "reference/button-sheet-01.png"
+    },
+    {
+      "id": "skip-animation",
+      "label": "偷偷快进一下",
+      "action": "跳过动画",
+      "file": "assets/nanfeng/buttons/skip-animation.png",
+      "width": 770,
+      "height": 172,
+      "format": "RGBA PNG",
+      "crop": [
+        127,
+        500,
+        897,
+        672
+      ],
+      "sourceSheet": "reference/button-sheet-01.png"
+    },
+    {
+      "id": "go-back",
+      "label": "回头瞧一眼",
+      "action": "返回上一页",
+      "file": "assets/nanfeng/buttons/go-back.png",
+      "width": 770,
+      "height": 171,
+      "format": "RGBA PNG",
+      "crop": [
+        127,
+        690,
+        897,
+        861
+      ],
+      "sourceSheet": "reference/button-sheet-01.png"
+    },
+    {
+      "id": "pause",
+      "label": "歇会儿，等你",
+      "action": "暂停游戏",
+      "file": "assets/nanfeng/buttons/pause.png",
+      "width": 770,
+      "height": 172,
+      "format": "RGBA PNG",
+      "crop": [
+        127,
+        878,
+        897,
+        1050
+      ],
+      "sourceSheet": "reference/button-sheet-01.png"
+    },
+    {
+      "id": "resume",
+      "label": "走吧，我陪你",
+      "action": "继续冒险",
+      "file": "assets/nanfeng/buttons/resume.png",
+      "width": 770,
+      "height": 172,
+      "format": "RGBA PNG",
+      "crop": [
+        127,
+        1068,
+        897,
+        1240
+      ],
+      "sourceSheet": "reference/button-sheet-01.png"
+    },
+    {
+      "id": "restart",
+      "label": "再陪你走一遍",
+      "action": "重新开始",
+      "file": "assets/nanfeng/buttons/restart.png",
+      "width": 770,
+      "height": 173,
+      "format": "RGBA PNG",
+      "crop": [
+        127,
+        1257,
+        897,
+        1430
+      ],
+      "sourceSheet": "reference/button-sheet-01.png"
+    },
+    {
+      "id": "home",
+      "label": "回小窝歇歇",
+      "action": "返回首页",
+      "file": "assets/nanfeng/buttons/home.png",
+      "width": 862,
+      "height": 187,
+      "format": "RGBA PNG",
+      "crop": [
+        81,
+        70,
+        943,
+        257
+      ],
+      "sourceSheet": "reference/button-sheet-02.png"
+    },
+    {
+      "id": "help",
+      "label": "冒险小纸条",
+      "action": "操作说明",
+      "file": "assets/nanfeng/buttons/help.png",
+      "width": 862,
+      "height": 186,
+      "format": "RGBA PNG",
+      "crop": [
+        81,
+        271,
+        943,
+        457
+      ],
+      "sourceSheet": "reference/button-sheet-02.png"
+    },
+    {
+      "id": "confirm-exit",
+      "label": "约好，下次见",
+      "action": "确认离开",
+      "file": "assets/nanfeng/buttons/confirm-exit.png",
+      "width": 863,
+      "height": 187,
+      "format": "RGBA PNG",
+      "crop": [
+        81,
+        470,
+        944,
+        657
+      ],
+      "sourceSheet": "reference/button-sheet-02.png"
+    },
+    {
+      "id": "cancel-exit",
+      "label": "那就，再陪一会儿",
+      "action": "留在这里",
+      "file": "assets/nanfeng/buttons/cancel-exit.png",
+      "width": 863,
+      "height": 187,
+      "format": "RGBA PNG",
+      "crop": [
+        81,
+        671,
+        944,
+        858
+      ],
+      "sourceSheet": "reference/button-sheet-02.png"
+    },
+    {
+      "id": "enter-game",
+      "label": "走啦，鱼鱼等着呢",
+      "action": "进入游戏",
+      "file": "assets/nanfeng/buttons/enter-game.png",
+      "width": 863,
+      "height": 187,
+      "format": "RGBA PNG",
+      "crop": [
+        81,
+        871,
+        944,
+        1058
+      ],
+      "sourceSheet": "reference/button-sheet-02.png"
+    },
+    {
+      "id": "music-off",
+      "label": "关闭音乐",
+      "action": "关闭音乐",
+      "file": "assets/nanfeng/buttons/music-off.png",
+      "width": 863,
+      "height": 186,
+      "format": "RGBA PNG",
+      "crop": [
+        81,
+        1078,
+        944,
+        1264
+      ],
+      "sourceSheet": "reference/button-sheet-02.png"
+    },
+    {
+      "id": "music-on",
+      "label": "开启音乐",
+      "action": "开启音乐",
+      "file": "assets/nanfeng/buttons/music-on.png",
+      "width": 862,
+      "height": 187,
+      "format": "RGBA PNG",
+      "crop": [
+        81,
+        1279,
+        943,
+        1466
+      ],
+      "sourceSheet": "reference/button-sheet-02.png"
+    }
+  ],
+  "appearance": {
+    "fill": "#344b43",
+    "border": "#d5c598",
+    "text": "#f4ead0"
+  },
+  "notes": [
+    "两张生成素材表中的按钮逐个裁切，未重绘文字或图标。",
+    "按钮外部为透明通道，内侧深绿底接近不透明；半透明观感来自柔和底纹。",
+    "PNG 内的文案和图标已合并，按钮点击行为需项目代码实现。"
+  ]
+}
