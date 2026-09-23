@@ -4,7 +4,15 @@ import forestBackgroundUrl from '../../assets/environment/森林花海_原场景
 const WIDTH = 960;
 const HEIGHT = 540;
 const STYLE_ID = 'recall-forest-loading-style';
-const activeLoaders = new WeakMap<Phaser.Scene, () => void>();
+const INTRO_MIN_VISIBLE_MS = 4000;
+const FOREST_MIN_VISIBLE_MS = 2500;
+
+export interface LoadingUIHandle {
+  finish(onHidden?: () => void): void;
+  destroy(): void;
+}
+
+const activeLoaders = new WeakMap<Phaser.Scene, LoadingUIHandle>();
 
 function installStyle(): void {
   if (document.getElementById(STYLE_ID)) return;
@@ -14,7 +22,7 @@ function installStyle(): void {
     .recall-forest-loading {
       position: fixed; width: 960px; height: 540px; overflow: hidden;
       z-index: 2147482000; transform-origin: top left;
-      pointer-events: none; color: #f3e9d0;
+      pointer-events: none; color: #f3e9d0; background: #17382b;
       font-family: Arial, "Microsoft YaHei", sans-serif;
     }
     .recall-forest-loading * { box-sizing: border-box; }
@@ -57,12 +65,12 @@ function installStyle(): void {
       color: rgba(253,235,190,.85); font: 13px/1 Georgia, serif;
     }
     .recall-forest-loading__track {
-      position: relative; flex: 1; height: 2px;
+      position: relative; flex: 1; height: 5px; border-radius: 5px;
       background: rgba(249,235,198,.22); overflow: visible;
       box-shadow: 0 1px 5px rgba(10,25,18,.4);
     }
     .recall-forest-loading__fill {
-      display: block; width: 0; height: 2px;
+      display: block; width: 0; height: 5px; border-radius: 5px;
       background: linear-gradient(90deg, #b6ad89, #f1dca8, #fff6d8);
       box-shadow: 0 0 8px rgba(254,238,193,.47);
       transition: width 170ms ease-out;
@@ -72,14 +80,22 @@ function installStyle(): void {
   document.head.append(style);
 }
 
-/** Shows the real Phaser loader progress between the opening film and forest scene. */
-export function showForestLoadingUI(scene: Phaser.Scene): void {
-  activeLoaders.get(scene)?.();
+/** Shows the real Phaser loader progress and keeps the transition visible for at least four seconds. */
+export function showForestLoadingUI(
+  scene: Phaser.Scene,
+  title = '正在走进森林',
+  subtitle = '循着花香，寻找记忆',
+  destroyOnCreate = true,
+): LoadingUIHandle {
+  const existing = activeLoaders.get(scene);
+  if (existing) return existing;
   installStyle();
+  const minVisibleMs = destroyOnCreate ? FOREST_MIN_VISIBLE_MS : INTRO_MIN_VISIBLE_MS;
+  const shownAt = performance.now();
   const root = document.createElement('div');
   root.className = 'recall-forest-loading';
   root.setAttribute('role', 'status');
-  root.setAttribute('aria-label', '正在进入森林，加载 0%');
+  root.setAttribute('aria-label', `${title}，加载 0%`);
   root.innerHTML = `
     <div class="recall-forest-loading__image"></div>
     <div class="recall-forest-loading__veil"></div>
@@ -90,8 +106,8 @@ export function showForestLoadingUI(scene: Phaser.Scene): void {
         ).join('')}
         <circle cx="36" cy="38" r="5" />
       </svg>
-      <h1 class="recall-forest-loading__title">正在走进森林</h1>
-      <p class="recall-forest-loading__subtitle">循着花香，寻找记忆</p>
+      <h1 class="recall-forest-loading__title">${title}</h1>
+      <p class="recall-forest-loading__subtitle">${subtitle}</p>
       <div class="recall-forest-loading__progress" aria-hidden="true">
         <div class="recall-forest-loading__track"><span class="recall-forest-loading__fill"></span></div>
         <span class="recall-forest-loading__percent">0%</span>
@@ -99,6 +115,8 @@ export function showForestLoadingUI(scene: Phaser.Scene): void {
     </div>`;
 
   let destroyed = false;
+  let finishTimer: ReturnType<typeof setTimeout> | undefined;
+  const onHiddenCallbacks: Array<() => void> = [];
   const position = () => {
     const bounds = scene.game.canvas.getBoundingClientRect();
     root.style.left = `${bounds.left}px`;
@@ -110,23 +128,43 @@ export function showForestLoadingUI(scene: Phaser.Scene): void {
     const percent = Math.round(amount * 100);
     root.querySelector<HTMLElement>('.recall-forest-loading__fill')!.style.width = `${percent}%`;
     root.querySelector<HTMLElement>('.recall-forest-loading__percent')!.textContent = `${percent}%`;
-    root.setAttribute('aria-label', `正在进入森林，加载 ${percent}%`);
+    root.setAttribute('aria-label', `${title}，加载 ${percent}%`);
   };
   const destroy = () => {
     if (destroyed) return;
     destroyed = true;
+    if (finishTimer) clearTimeout(finishTimer);
     scene.load.off(Phaser.Loader.Events.PROGRESS, progress);
-    scene.events.off(Phaser.Scenes.Events.CREATE, destroy);
+    scene.events.off(Phaser.Scenes.Events.CREATE, onSceneCreated);
     scene.events.off(Phaser.Scenes.Events.SHUTDOWN, destroy);
     scene.scale.off(Phaser.Scale.Events.RESIZE, position);
     root.remove();
     activeLoaders.delete(scene);
+    onHiddenCallbacks.splice(0).forEach(callback => callback());
+  };
+  const finish = (onHidden?: () => void) => {
+    if (destroyed) {
+      onHidden?.();
+      return;
+    }
+    if (onHidden) onHiddenCallbacks.push(onHidden);
+    if (finishTimer) return;
+    const remaining = Math.max(0, minVisibleMs - (performance.now() - shownAt));
+    finishTimer = setTimeout(destroy, remaining);
+  };
+  const onSceneCreated = () => {
+    progress(1);
+    // Leave a short buffer for the first frame without depending on animation
+    // frames, which browsers can pause in a background tab.
+    setTimeout(() => finish(), 100);
   };
   document.body.append(root);
   position();
   scene.load.on(Phaser.Loader.Events.PROGRESS, progress);
-  scene.events.once(Phaser.Scenes.Events.CREATE, destroy);
+  if (destroyOnCreate) scene.events.once(Phaser.Scenes.Events.CREATE, onSceneCreated);
   scene.events.once(Phaser.Scenes.Events.SHUTDOWN, destroy);
   scene.scale.on(Phaser.Scale.Events.RESIZE, position);
-  activeLoaders.set(scene, destroy);
+  const handle = { finish, destroy };
+  activeLoaders.set(scene, handle);
+  return handle;
 }
