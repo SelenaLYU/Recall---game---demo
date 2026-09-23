@@ -49,7 +49,7 @@ export class Vine {
       ? scene.add.image(anchorX, anchorY, 'env-jasmine-vine').setOrigin(0.5, 0).setDepth(2)
       : null;
     this.handGlow = scene.add
-      .ellipse(0, 0, 64, 64, 0xf6e7b8, 0.3)
+      .ellipse(0, 0, 36, 36, 0xf6e7b8, 0.24)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(3)
       .setVisible(false);

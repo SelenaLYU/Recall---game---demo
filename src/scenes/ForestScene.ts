@@ -200,8 +200,8 @@ export default class ForestScene extends Phaser.Scene {
       .setScale(1.02)
       .setScrollFactor(0)
       .setDepth(-9)
-      // 轻微降饱和压亮度，让花海退到“远景”，前景路线/角色成为主次（配合深度雾）
-      .setTint(0xdde8e0);
+      // 再退暗退饱和：背景是"远景空气"，亮度和锐度都要低于角色与落脚面（视觉样板第一步）
+      .setTint(0xb9c6bc);
   }
 
   /** 世界层装饰树（无碰撞，位于角色身后） */
@@ -216,7 +216,9 @@ export default class ForestScene extends Phaser.Scene {
           .setOrigin(0.5, 1)
           .setScale(scale)
           .setDepth(-4)
-          .setAlpha(0.96);
+          // 压暗降透明：树属于背景层，亮度和存在感不得与角色争（此前接近角色导致"贴图感"）
+          .setTint(0xaebab0)
+          .setAlpha(0.86);
       });
       return;
     }

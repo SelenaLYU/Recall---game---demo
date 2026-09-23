@@ -5,8 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Recall 游戏 Demo</title>
     <style>
+      html,
       body {
         margin: 0;
+        height: 100%;
+        /* 页面自身不滚动：FIT 已按窗口等比缩放（小窗口曾出现整页滚动条） */
+        overflow: hidden;
         /* 与游戏底色一致：FIT 信箱黑边不突兀 */
         background: #15251f;
       }
