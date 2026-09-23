@@ -105,6 +105,14 @@ export class Player {
   private groundAnimSince = 0;
   /** 空中动画死区：顶点附近 vy≈0 时保持上一状态，避免 jump/fall 抖动 */
   private airAnim: 'yuyu-jump' | 'yuyu-fall' = 'yuyu-jump';
+  /**
+   * 空中姿势平滑进度：速度直接映射 4 帧会在速度骤变时跳过中间姿势
+   * （“动作跳帧”），对进度做低通滤波后帧序号只会逐步推进
+   */
+  private airPose = 0;
+  private prevAirAnim: 'yuyu-jump' | 'yuyu-fall' = 'yuyu-jump';
+  /** 最近一次踩到的地面高度：用于接触阴影随离地高度淡化 */
+  private lastGroundY = 0;
   /** 自动走位目标（房间点击物件后走近），到达即回调 */
   private autoWalkTarget: number | null = null;
   private autoWalkDone: (() => void) | null = null;
@@ -433,6 +441,7 @@ export class Player {
     this.view.setRotation(0);
     this.view.setPosition(x, y);
     this.body.reset(x, y);
+    this.lastGroundY = y + this.opts.height / 2;
     this.currentAnim = '';
     this.coyoteTimer = 0;
     this.jumpBufferTimer = 0;
@@ -458,9 +467,16 @@ export class Player {
     });
   }
 
-  /** 状态 → 动画：地面循环动画用滞回+最小停留防抖；空中用速度死区防抖后逐帧取帧 */
+  /** 状态 → 动画：地面循环动画用滞回+最小停留防抖；空中姿势低通滤波防跳帧；
+   *  接触阴影随离地高度淡化缩放（贴地实、越高越淡越小） */
   private animate(delta: number, onGround: boolean): void {
-    this.shadow.setAlpha(onGround ? 0.28 : 0.12);
+    const feet = this.view.y + this.opts.height / 2;
+    if (onGround) {
+      this.lastGroundY = feet;
+    }
+    const heightRatio = Phaser.Math.Clamp((feet - this.lastGroundY) / 150, 0, 1);
+    this.shadow.setAlpha(Phaser.Math.Linear(0.3, 0.05, heightRatio));
+    this.shadow.setScale(Phaser.Math.Linear(1, 0.62, heightRatio), 1);
     const speedRatio =
       this.opts.speed === 0 ? 0 : Math.min(1, Math.abs(this.body.velocity.x) / this.opts.speed);
 
@@ -471,13 +487,20 @@ export class Player {
       } else if (vy > 25) {
         this.airAnim = 'yuyu-fall';
       }
-      if (this.airAnim === 'yuyu-jump') {
-        const p = Phaser.Math.Clamp((vy - this.jumpLaunchVy) / -this.jumpLaunchVy, 0, 1);
-        this.setAirFrame('char-yuyu-jump', p);
-      } else {
-        const p = Phaser.Math.Clamp(vy / 700, 0, 1);
-        this.setAirFrame('char-yuyu-fall', p);
+      // 新阶段从第 0 帧起步，随后低通滤波推进——姿势逐帧过渡不跳帧
+      if (this.airAnim !== this.prevAirAnim) {
+        this.prevAirAnim = this.airAnim;
+        this.airPose = 0;
       }
+      const target =
+        this.airAnim === 'yuyu-jump'
+          ? Phaser.Math.Clamp((vy - this.jumpLaunchVy) / -this.jumpLaunchVy, 0, 1)
+          : Phaser.Math.Clamp(vy / 700, 0, 1);
+      this.airPose += (target - this.airPose) * Math.min(1, delta * 0.012);
+      this.setAirFrame(
+        this.airAnim === 'yuyu-jump' ? 'char-yuyu-jump' : 'char-yuyu-fall',
+        this.airPose,
+      );
       this.stepTimer = 0;
     } else if (speedRatio > 0.05 || this.groundAnim === 'yuyu-run') {
       // 滞回：进入跑需 >0.12，退出跑需 <0.05，且至少停留 90ms，防高频互切
