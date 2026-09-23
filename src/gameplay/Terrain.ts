@@ -27,8 +27,6 @@ const COLORS = {
   grass: 0x4a7a5c,
   /** 可站立表面的统一识别亮边（玩家据此辨认落脚处）——程序占位绘制用 */
   grassEdge: 0x8fd1a8,
-  /** B 贴图模式下的顶面高光：暖白微光替代亮绿描边（实机看亮绿线像荧光边界线，与水彩风割裂） */
-  topGlow: 0xfff3d9,
   grassBlade: 0x69a07e,
   root: 0x1c3026,
 } as const;
@@ -130,11 +128,8 @@ export class Terrain {
         .setOrigin(0, 0);
       hedge.setTileScale(0.236 + jitter, 0.236 + jitter);
       hedge.setTint(x % 240 < 120 ? 0xf6f9f2 : 0xe9efe4);
-      // 顶面高光：一条极淡的暖白微光落在碰撞顶面（可读性约定的"表面读法"）。
-      // 不再用亮绿描边——实机看像荧光边界线，贴在 B 的水彩花丛上非常突兀
-      const edge = this.scene.add.graphics();
-      edge.lineStyle(3, COLORS.topGlow, 0.14);
-      edge.lineBetween(x + 4, y + 2, x + width - 4, y + 2);
+      // 顶面不再画任何程序高光/描边（2026-09-24：topGlow 淡线实机读作
+      // "灰色界限"，与水彩背景割裂）——落脚面读法交给贴图本身
       return;
     }
     const g = this.scene.add.graphics();
@@ -183,9 +178,6 @@ export class Terrain {
           });
         }
       }
-      const edge = this.scene.add.graphics();
-      edge.lineStyle(3, COLORS.topGlow, 0.16);
-      edge.lineBetween(x - 2, y + 2, x + width + 2, y + 2);
       return;
     }
     const g = this.scene.add.graphics();
