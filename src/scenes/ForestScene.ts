@@ -75,7 +75,14 @@ export default class ForestScene extends Phaser.Scene {
       frameWidth: 96,
       frameHeight: 112,
     });
-    this.load.image('env-forest-bg', 'assets/environment/env-forest-no-slope-1920x1080.jpg');
+    this.load.image('env-forest-bg', 'assets/environment/森林花海_原场景清晰化_无坡_1920x1080_v2.png');
+    // 茉莉花森林套装（B 交付）
+    this.load.image('env-jasmine-ground', 'assets/environment/env-jasmine-ground-platform-1640x220.png');
+    this.load.image('env-jasmine-platform', 'assets/environment/env-jasmine-platform-512x144.png');
+    this.load.image('env-jasmine-vine', 'assets/environment/env-jasmine-vine-128x512.png');
+    this.load.image('env-jasmine-branch', 'assets/environment/env-jasmine-support-branch-1280x384.png');
+    this.load.image('env-jasmine-door', 'assets/environment/env-manchurian-jasmine-door-256x384.png');
+    this.load.image('item-golden-key', 'assets/environment/item-golden-jasmine-key-192x256.png');
     this.load.audio('forest-bgm', 'assets/audio/forest-bgm.mp3');
   }
 
@@ -130,9 +137,10 @@ export default class ForestScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#17382b');
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT, true, true, false, false);
 
-    // 背景由远及近：天空渐变 → 吉卜力森林背景（B 素材，铺满）→ 树
+    // 背景由远及近：天空渐变 → 吉卜力森林背景（B 素材，铺满）→ 深度雾 → 树
     this.buildSky();
     this.buildArtBackdrop();
+    this.buildDepthFog();
     this.buildTrees();
     this.buildVineBranch();
     this.buildTerrain();
@@ -204,8 +212,34 @@ export default class ForestScene extends Phaser.Scene {
     });
   }
 
-  /** 藤蔓谷上方的横枝（纯视觉，贴近背景笔触、低对比；藤蔓锚点挂在其上） */
+  /**
+   * 深度雾：把背景花海下半部压暗成远景，解决"背景像可行走地面"的混淆——
+   * 前景篱笆地面保持鲜亮、坑区雾蒙蒙呈深渊感（可读性约定见 AGENTS.md 第 5 节）。
+   * canvas 渐变图必须铺满全屏（960×540），否则 zoom 下只显示一角。
+   */
+  private buildDepthFog(): void {
+    if (!this.textures.exists('depth-fog')) {
+      const texture = this.textures.createCanvas('depth-fog', 960, 540);
+      const ctx = texture?.getContext();
+      if (texture && ctx) {
+        const gradient = ctx.createLinearGradient(0, 260, 0, 540);
+        gradient.addColorStop(0, 'rgba(10, 26, 19, 0)');
+        gradient.addColorStop(0.55, 'rgba(10, 26, 19, 0.42)');
+        gradient.addColorStop(1, 'rgba(10, 26, 19, 0.78)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 960, 540);
+        texture.refresh();
+      }
+    }
+    this.add.image(480, 270, 'depth-fog').setScrollFactor(0).setDepth(-8);
+  }
+
+  /** 藤蔓谷上方的横枝：B 的茉莉花枝贴图（锚点挂在其上；无贴图时退回程序绘制） */
   private buildVineBranch(): void {
+    if (this.textures.exists('env-jasmine-branch')) {
+      this.add.image(790, 14, 'env-jasmine-branch').setOrigin(0, 0).setScale(0.52).setDepth(0);
+      return;
+    }
     const g = this.add.graphics().setDepth(0).setAlpha(0.9);
     g.lineStyle(10, 0x305040, 1);
     g.beginPath();
@@ -291,18 +325,23 @@ export default class ForestScene extends Phaser.Scene {
     const keyY = 185;
     this.keyVisual = this.add.container(keyX, keyY).setDepth(6);
     const glow = this.add.ellipse(0, 0, 64, 64, GOLD, 0.18);
-    const keyGraphic = this.add.graphics();
-    keyGraphic.lineStyle(4, GOLD, 1);
-    keyGraphic.strokeCircle(0, -8, 7);
-    keyGraphic.fillStyle(GOLD, 1);
-    keyGraphic.fillRect(-2, -2, 4, 16);
-    keyGraphic.fillRect(2, 8, 6, 4);
+    const keyDisplay: Phaser.GameObjects.GameObject = this.textures.exists('item-golden-key')
+      ? this.add.image(0, 0, 'item-golden-key').setScale(0.28)
+      : (() => {
+          const keyGraphic = this.add.graphics();
+          keyGraphic.lineStyle(4, GOLD, 1);
+          keyGraphic.strokeCircle(0, -8, 7);
+          keyGraphic.fillStyle(GOLD, 1);
+          keyGraphic.fillRect(-2, -2, 4, 16);
+          keyGraphic.fillRect(2, 8, 6, 4);
+          return keyGraphic;
+        })();
     const orbit = this.add.container(0, 0);
     orbit.add([
       this.add.circle(18, 0, 2.5, 0xf6e7b8, 0.9),
       this.add.circle(-18, 0, 2, 0xf6e7b8, 0.7),
     ]);
-    this.keyVisual.add([glow, keyGraphic, orbit]);
+    this.keyVisual.add([glow, keyDisplay, orbit]);
     this.tweens.add({
       targets: orbit,
       angle: 360,
@@ -325,12 +364,18 @@ export default class ForestScene extends Phaser.Scene {
   private buildDoor(): void {
     this.doorVisual = this.add.container(2620, GROUND_TOP).setDepth(6).setVisible(false);
     this.doorGlow = this.add.ellipse(0, -58, 96, 136, GOLD, 0.12);
-    const frame = this.add
-      .rectangle(0, 0, 76, 116, 0x8a6d3b)
-      .setOrigin(0.5, 1)
-      .setStrokeStyle(3, 0x11251d, 0.8);
-    const inner = this.add.rectangle(0, -6, 62, 104, 0x1c2f26).setOrigin(0.5, 1);
-    this.doorVisual.add([this.doorGlow, frame, inner]);
+    const doorPanel: Phaser.GameObjects.GameObject = this.textures.exists('env-jasmine-door')
+      ? this.add.image(0, 4, 'env-jasmine-door').setOrigin(0.5, 1).setScale(0.32)
+      : this.add
+          .rectangle(0, 0, 76, 116, 0x8a6d3b)
+          .setOrigin(0.5, 1)
+          .setStrokeStyle(3, 0x11251d, 0.8);
+    const inner = this.textures.exists('env-jasmine-door')
+      ? null
+      : this.add.rectangle(0, -6, 62, 104, 0x1c2f26).setOrigin(0.5, 1);
+    this.doorVisual.add(
+      inner ? [this.doorGlow, doorPanel, inner] : [this.doorGlow, doorPanel],
+    );
 
     this.doorZone = this.add.zone(2620, GROUND_TOP - 60, 96, 120);
     this.physics.add.existing(this.doorZone, true);
