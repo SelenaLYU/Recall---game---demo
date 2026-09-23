@@ -3,7 +3,7 @@ import { Player } from '../gameplay/Player';
 import { Terrain } from '../gameplay/Terrain';
 import { Effects } from '../gameplay/Effects';
 import { Sfx } from '../systems/Sfx';
-import { applyHDCamera, HD_SCALE } from '../systems/Resolution';
+import { applyHDCamera, bufferScaleOf, screenRefScaleOf } from '../systems/Resolution';
 import { showForestLoadingUI } from '../ui/ForestLoadingUI';
 import { Vine } from '../gameplay/Vine';
 import { Flower } from '../gameplay/Flower';
@@ -160,6 +160,7 @@ export default class ForestScene extends Phaser.Scene {
     this.buildHud();
     this.buildItemHud();
     this.buildVignette();
+    this.registerScreenLayerSync();
     Effects.fireflies(this, WORLD_WIDTH, 16);
 
     this.cameras.main.fadeIn(250, 23, 56, 43);
@@ -181,11 +182,11 @@ export default class ForestScene extends Phaser.Scene {
 
   /** 天空渐变：上亮下暗，压住画面底色 */
   private buildSky(): void {
-    const sky = this.add.graphics().setScrollFactor(0).setDepth(-10);
-    sky.fillGradientStyle(0x24503c, 0x24503c, 0x17382b, 0x17382b, 1);
-    sky.fillRect(0, 0, 960, 540);
-    sky.fillStyle(0x2d5a44, 0.3);
-    sky.fillRect(0, 0, 960, 80);
+    this.sfSky = this.add.graphics().setScrollFactor(0).setDepth(-10);
+    this.sfSky.fillGradientStyle(0x24503c, 0x24503c, 0x17382b, 0x17382b, 1);
+    this.sfSky.fillRect(0, 0, 960, 540);
+    this.sfSky.fillStyle(0x2d5a44, 0.3);
+    this.sfSky.fillRect(0, 0, 960, 80);
   }
 
   /**
@@ -194,14 +195,14 @@ export default class ForestScene extends Phaser.Scene {
    * （原雾/灌木视差层与 zoom 组合会错位，已移除；深度感由背景图与树/萤火虫承担。）
    */
   private buildArtBackdrop(): void {
-    this.add
+    this.sfBackdrop = this.add
       .image(0, 0, 'env-forest-bg')
       .setOrigin(0, 0)
-      .setScale(1.02)
       .setScrollFactor(0)
       .setDepth(-9)
-      // 再退暗退饱和：背景是"远景空气"，亮度和锐度都要低于角色与落脚面（视觉样板第一步）
+      // 轻微降饱和压亮度，让花海退到“远景”，前景路线/角色成为主次（配合深度雾）
       .setTint(0xb9c6bc);
+    this.sfBackdrop.setScale(1.02 * screenRefScaleOf(this));
   }
 
   /** 世界层装饰树（无碰撞，位于角色身后） */
@@ -255,14 +256,44 @@ export default class ForestScene extends Phaser.Scene {
         texture.refresh();
       }
     }
-    this.add.image(960, 540, 'screen-vignette').setScrollFactor(0).setDepth(95);
+    this.sfVignette = this.add
+      .image(960, 540, 'screen-vignette')
+      .setScrollFactor(0)
+      .setDepth(95)
+      .setScale(screenRefScaleOf(this));
+  }
+
+  /**
+   * 全屏 sf0 层随渲染缓冲重缩放：sf0 层世界单位 = 缓冲像素（zoom 不作用于它们），
+   * 缓冲随窗口变化（main.ts syncRenderBuffer）时这些层必须跟着缩放，
+   * 否则只盖住一角或溢出。场景关闭时解绑，防重玩叠加。
+   */
+  private registerScreenLayerSync(): void {
+    const sync = () => {
+      const zoom = bufferScaleOf(this);
+      const ref = screenRefScaleOf(this);
+      this.sfSky.setScale(zoom); // 内容 960×540 → 铺满缓冲
+      this.sfFog.setScale(zoom); // 内容 960×540
+      this.sfBackdrop.setScale(1.02 * ref); // 内容 1920×1080
+      this.sfVignette.setScale(ref); // 内容 1920×1080
+      this.hudLayer.setScale(zoom); // HUD 按 960 逻辑排布
+    };
+    sync();
+    this.scale.off(Phaser.Scale.Events.RESIZE, this.syncLayersHandler);
+    this.syncLayersHandler = sync;
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.syncLayersHandler);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      if (this.syncLayersHandler) {
+        this.scale.off(Phaser.Scale.Events.RESIZE, this.syncLayersHandler);
+      }
+      this.syncLayersHandler = undefined;
+    });
   }
 
   /**
    * 深度雾：把背景花海下半部压暗成远景，解决"背景像可行走地面"的混淆。
-   * 关键：scrollFactor 0 的层按世界尺寸 1:1 投进渲染缓冲（zoom 不作用于它），
-   * 高清相机视口是 1920×1080，雾图必须 setScale(HD_SCALE) 铺满全屏，
-   * 否则只盖住左上四分之一、露出笔直的雾层边缘（此前实测踩坑）。
+   * 关键：scrollFactor 0 的层世界单位 1:1 投进渲染缓冲（zoom 不作用于它），
+   * 雾画布 960×540，必须 setScale(缓冲倍率) 铺满全屏，否则只盖住一角。
    */
   private buildDepthFog(): void {
     if (!this.textures.exists('depth-fog')) {
@@ -278,11 +309,11 @@ export default class ForestScene extends Phaser.Scene {
         texture.refresh();
       }
     }
-    this.add
+    this.sfFog = this.add
       .image(480, 270, 'depth-fog')
       .setScrollFactor(0)
       .setDepth(-8)
-      .setScale(HD_SCALE);
+      .setScale(bufferScaleOf(this));
   }
 
   /** 藤蔓谷上方的横枝：B 的茉莉花枝贴图（锚点挂在其上；无贴图时退回程序绘制） */
@@ -451,15 +482,21 @@ export default class ForestScene extends Phaser.Scene {
     cam.followOffset.x += (targetX - cam.followOffset.x) * Math.min(1, delta * 0.004);
   }
 
-  /** HUD 层：scrollFactor 0 + 按 HD_SCALE 放大，抵消相机 zoom 对 HUD 造成的缩小 */
+  /** HUD 层：scrollFactor 0 + 按缓冲倍率放大，抵消相机 zoom 对 HUD 造成的缩小 */
   private hudLayer!: Phaser.GameObjects.Container;
+  /** 全屏 sf0 层（天空/背景/雾/暗角）：渲染缓冲随窗口变化时统一重缩放 */
+  private sfSky!: Phaser.GameObjects.Graphics;
+  private sfBackdrop!: Phaser.GameObjects.Image;
+  private sfFog!: Phaser.GameObjects.Image;
+  private sfVignette!: Phaser.GameObjects.Image;
+  private syncLayersHandler?: () => void;
 
   private buildHud(): void {
     this.hudLayer = this.add
       .container(0, 0)
       .setScrollFactor(0)
       .setDepth(100)
-      .setScale(HD_SCALE);
+      .setScale(bufferScaleOf(this));
     this.hintText = this.add.text(16, 14, '', {
       fontFamily: 'sans-serif',
       fontSize: '15px',
