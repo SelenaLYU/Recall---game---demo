@@ -33,6 +33,9 @@ export class Sfx {
   }
 
   jump(): void {
+    if (this.playSample('sfx-jump', 0.3)) {
+      return;
+    }
     this.tone({ type: 'triangle', from: 200, to: 470, duration: 0.13, volume: 0.32 });
   }
 
@@ -42,7 +45,19 @@ export class Sfx {
   }
 
   step(): void {
+    if (this.playSample('sfx-footstep', 0.16)) {
+      return;
+    }
     this.noise(0.045, 0.07, 1400);
+  }
+
+  /** 已加载的真实音效采样优先（B 交付），未加载/未解锁时由调用方回退合成 */
+  private playSample(key: string, volume: number): boolean {
+    if (!this.scene.cache.audio.exists(key) || this.scene.sound.locked) {
+      return false;
+    }
+    this.scene.sound.play(key, { volume });
+    return true;
   }
 
   key(): void {
