@@ -213,25 +213,30 @@ export default class ForestScene extends Phaser.Scene {
   }
 
   /**
-   * 深度雾：把背景花海下半部压暗成远景，解决"背景像可行走地面"的混淆——
-   * 前景篱笆地面保持鲜亮、坑区雾蒙蒙呈深渊感（可读性约定见 AGENTS.md 第 5 节）。
-   * canvas 渐变图必须铺满全屏（960×540），否则 zoom 下只显示一角。
+   * 深度雾：把背景花海下半部压暗成远景，解决"背景像可行走地面"的混淆。
+   * 关键：scrollFactor 0 的层按世界尺寸 1:1 投进渲染缓冲（zoom 不作用于它），
+   * 高清相机视口是 1920×1080，雾图必须 setScale(HD_SCALE) 铺满全屏，
+   * 否则只盖住左上四分之一、露出笔直的雾层边缘（此前实测踩坑）。
    */
   private buildDepthFog(): void {
     if (!this.textures.exists('depth-fog')) {
       const texture = this.textures.createCanvas('depth-fog', 960, 540);
       const ctx = texture?.getContext();
       if (texture && ctx) {
-        const gradient = ctx.createLinearGradient(0, 260, 0, 540);
+        const gradient = ctx.createLinearGradient(0, 200, 0, 540);
         gradient.addColorStop(0, 'rgba(10, 26, 19, 0)');
-        gradient.addColorStop(0.55, 'rgba(10, 26, 19, 0.42)');
-        gradient.addColorStop(1, 'rgba(10, 26, 19, 0.78)');
+        gradient.addColorStop(0.5, 'rgba(10, 26, 19, 0.45)');
+        gradient.addColorStop(1, 'rgba(10, 26, 19, 0.82)');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, 960, 540);
         texture.refresh();
       }
     }
-    this.add.image(480, 270, 'depth-fog').setScrollFactor(0).setDepth(-8);
+    this.add
+      .image(480, 270, 'depth-fog')
+      .setScrollFactor(0)
+      .setDepth(-8)
+      .setScale(HD_SCALE);
   }
 
   /** 藤蔓谷上方的横枝：B 的茉莉花枝贴图（锚点挂在其上；无贴图时退回程序绘制） */

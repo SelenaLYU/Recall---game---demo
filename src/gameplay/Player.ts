@@ -306,6 +306,9 @@ export class Player {
     return this.attachedVine;
   }
 
+  /** 抓藤悬挂时身体中心与握点的距离：让画面上的手正好落在花环处 */
+  private static readonly VINE_HANG_PX = 18;
+
   /** 抓住藤蔓：停用物理体，由藤蔓摆荡驱动位置 */
   attachVine(vine: Vine): void {
     this.attachedVine = vine;
@@ -313,10 +316,11 @@ export class Player {
     this.body.setVelocity(0, 0);
     this.body.enable = false;
     this.opts.sfx?.grab();
-    // 悬挂姿势：定格跳跃后段帧（手臂抬起），阴影淡出
+    // 抓住瞬间“收紧”：定格举手帧 + 轻微压缩脉冲，手扣住花环
     this.sprite.anims.stop();
     this.currentAnim = '';
     this.sprite.setTexture('char-yuyu-jump', 2);
+    this.squash(1.07, 0.93);
     this.shadow.setAlpha(0.1);
     this.view.setRotation(0);
   }
@@ -333,6 +337,10 @@ export class Player {
     this.body.enable = true;
     this.body.setAllowGravity(true);
     this.body.setVelocity(velocity.vx, velocity.vy);
+    // 松手：面朝甩出方向展开，空中逐帧按新速度播放
+    this.facing = velocity.vx >= 0 ? 1 : -1;
+    this.displayedFacing = this.facing;
+    this.view.scaleX = this.facing;
     this.view.setRotation(0);
     this.wasOnGround = false;
     this.prevFallSpeed = 0;
@@ -354,8 +362,8 @@ export class Player {
       (this.isDown('S') || this.isDown('DOWN') ? 1 : 0);
     vine.update(delta, { dirX, climb });
 
-    // 双手抓在握点，身体沿藤蔓方向垂下并随摆角倾斜（钟摆感，不再是直立硬挂）
-    const hang = 24;
+    // 双手抓在握点上（身体中心悬在握点下方 VINE_HANG_PX），随摆角倾斜成钟摆
+    const hang = Player.VINE_HANG_PX;
     this.view.setPosition(
       vine.handX - Math.sin(vine.angle) * hang,
       vine.handY + Math.cos(vine.angle) * hang,
