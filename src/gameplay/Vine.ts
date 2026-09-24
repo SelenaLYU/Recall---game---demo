@@ -28,6 +28,10 @@ export class Vine {
   private readonly visual: Phaser.GameObjects.Graphics;
   /** 茉莉藤蔓贴图身体（跟随摆角旋转、绳长缩放；无贴图时退回线条绘制） */
   private readonly bodyImage: Phaser.GameObjects.Image | null;
+  /** 握点的发光五彩茉莉花枝（B 新素材）：花心对齐握点，随绳摆动 */
+  private readonly handFlower: Phaser.GameObjects.Image | null;
+  /** 花枝贴图里花心的位置（256×256 源，花头中心实测 ≈(128,88)） */
+  private static readonly FLOWER_ORIGIN = { x: 0.5, y: 88 / 256 };
   /** 握点预告光环（玩家接近时亮起，标记可抓范围） */
   private readonly handGlow: Phaser.GameObjects.Ellipse;
   private near = false;
@@ -47,6 +51,17 @@ export class Vine {
     this.visual = scene.add.graphics().setDepth(3);
     this.bodyImage = scene.textures.exists('env-jasmine-vine')
       ? scene.add.image(anchorX, anchorY, 'env-jasmine-vine').setOrigin(0.5, 0).setDepth(2)
+      : null;
+    // 握点花：B 的发光五彩茉莉花枝，替换原程序花瓣环（2026-09-24 按需求更换）
+    this.handFlower = scene.textures.exists('env-glowing-sprig')
+      ? scene.add
+          .image(anchorX, anchorY + this.length, 'env-glowing-sprig')
+          .setOrigin(
+            Vine.FLOWER_ORIGIN.x,
+            Vine.FLOWER_ORIGIN.y,
+          )
+          .setScale(0.62)
+          .setDepth(3)
       : null;
     this.handGlow = scene.add
       .ellipse(0, 0, 36, 36, 0xf6e7b8, 0.24)
@@ -168,15 +183,21 @@ export class Vine {
       }
     }
 
-    // 末端花环握点：花瓣环 + 亮花心 + 描边圈，明确“这里能抓”
-    g.fillStyle(0xe9f5e4, 1);
-    for (let i = 0; i < 6; i++) {
-      const a = (Math.PI * 2 * i) / 6 + 0.4;
-      g.fillEllipse(handX + Math.cos(a) * 8, handY + Math.sin(a) * 8, 10, 10);
+    // 末端握点：发光五彩茉莉花枝（花心=握点，随绳摆动）；程序花瓣环已退役。
+    // 花心对齐约定与 Player.GRAB_FLOWER 的"帧内花心钉握点"共用同一握点坐标
+    if (this.handFlower) {
+      this.handFlower.setPosition(handX, handY).setRotation(-this.angle);
+    } else {
+      // 无贴图回退：花瓣环 + 亮花心 + 描边圈，明确"这里能抓"
+      g.fillStyle(0xe9f5e4, 1);
+      for (let i = 0; i < 6; i++) {
+        const a = (Math.PI * 2 * i) / 6 + 0.4;
+        g.fillEllipse(handX + Math.cos(a) * 8, handY + Math.sin(a) * 8, 10, 10);
+      }
+      g.lineStyle(2, 0x8a6d3b, 0.95);
+      g.strokeCircle(handX, handY, 12);
+      g.fillStyle(0xf6e7b8, 1);
+      g.fillCircle(handX, handY, 5);
     }
-    g.lineStyle(2, 0x8a6d3b, 0.95);
-    g.strokeCircle(handX, handY, 12);
-    g.fillStyle(0xf6e7b8, 1);
-    g.fillCircle(handX, handY, 5);
   }
 }

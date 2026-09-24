@@ -22,7 +22,9 @@ import doorUrl from '../../assets/environment/env-manchurian-jasmine-door-256x38
 import keyUrl from '../../assets/environment/item-golden-jasmine-key-192x256.png?url';
 import giantPlantUrl from '../../assets/environment/env-giant-jasmine-plant-256x384.png?url';
 import treeUrl from '../../assets/environment/env-tree-watercolor-256x320.png?url';
-import slopeUrl from '../../assets/environment/env-flower-slope-transparent-1920x1080.png?url';
+import sprigUrl from '../../assets/environment/env-glowing-multicolor-jasmine-sprig-256x256.png?url';
+import bloomUrl from '../../assets/environment/env-small-jasmine-bloom-128x128.png?url';
+import grabAnimUrl from '../../assets/environment/yuyu-grab-small-jasmine-right-128x160-6f.png?url';
 import footstepUrl from '../../assets/audio/sfx-footstep.wav?url';
 import jumpSfxUrl from '../../assets/audio/sfx-jump.wav?url';
 import forestBgmUrl from '../../assets/audio/forest-bgm.mp3?url';
@@ -94,7 +96,8 @@ export default class ForestScene extends Phaser.Scene {
       frameHeight: 112,
     });
     this.load.image('env-forest-bg', forestBgUrl);
-    // 茉莉花森林套装（B 交付）
+    // 茉莉花森林套装（B 交付）。花坡纹理已不再使用（开场平地起手；其半透明
+    // 水彩残影曾是"背景大色块"的来源），不再加载省 1MB 内存
     this.load.image('env-jasmine-ground', groundUrl);
     this.load.image('env-jasmine-platform', platformUrl);
     this.load.image('env-jasmine-vine', vineUrl);
@@ -103,26 +106,15 @@ export default class ForestScene extends Phaser.Scene {
     this.load.image('item-golden-key', keyUrl);
     this.load.image('env-giant-jasmine-plant', giantPlantUrl);
     this.load.image('env-tree-watercolor', treeUrl);
-    this.load.image('env-flower-slope', slopeUrl);
-    this.load.audio('sfx-footstep', footstepUrl);
-    this.load.audio('sfx-jump', jumpSfxUrl);
-    this.load.audio('forest-bgm', forestBgmUrl);
-    this.load.image('env-jasmine-ground', 'assets/environment/env-jasmine-ground-platform-1640x220.png');
-    this.load.image('env-jasmine-platform', 'assets/environment/env-jasmine-platform-512x144.png');
-    this.load.image('env-jasmine-vine', 'assets/environment/env-jasmine-vine-128x512.png');
-    this.load.image('env-small-jasmine-bloom', 'assets/environment/env-small-jasmine-bloom-128x128.png');
-    this.load.image('env-jasmine-branch', 'assets/environment/env-jasmine-support-branch-1280x384.png');
-    this.load.image('env-jasmine-door', 'assets/environment/env-manchurian-jasmine-door-256x384.png');
-    this.load.image('item-golden-key', 'assets/environment/item-golden-jasmine-key-192x256.png');
-    this.load.image('env-giant-jasmine-plant', 'assets/environment/env-giant-jasmine-plant-256x384.png');
-    this.load.image('env-tree-watercolor', 'assets/environment/env-tree-watercolor-256x320.png');
-    this.load.spritesheet('char-yuyu-grab', 'assets/environment/yuyu-grab-small-jasmine-right-128x160-6f.png', {
+    this.load.image('env-glowing-sprig', sprigUrl);
+    this.load.image('env-small-jasmine-bloom', bloomUrl);
+    this.load.spritesheet('char-yuyu-grab', grabAnimUrl, {
       frameWidth: 128,
       frameHeight: 160,
     });
-    this.load.audio('sfx-footstep', 'assets/audio/sfx-footstep.m4a');
-    this.load.audio('sfx-jump', 'assets/audio/sfx-jump.wav');
-    this.load.audio('forest-bgm', 'assets/audio/forest-bgm.mp3');
+    this.load.audio('sfx-footstep', footstepUrl);
+    this.load.audio('sfx-jump', jumpSfxUrl);
+    this.load.audio('forest-bgm', forestBgmUrl);
   }
 
   /** 森林专属配乐：首次用户操作后解锁，离开森林时停止并清理。 */

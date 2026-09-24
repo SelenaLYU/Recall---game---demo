@@ -7,6 +7,10 @@ import { isBackgroundMusicEnabled, preloadMenuRoomMusic, playMenuRoomMusic, setB
 import { BASE_WIDTH, BASE_HEIGHT, applyHDCamera, computeBufferScale, initialBufferSize } from './systems/Resolution';
 import menuFullUrl from '../assets/ui/menu-opening-full.png?url';
 import adventureNoteUrl from '../assets/ui/adventure-note.png?url';
+// 信箱区背景图（手机竖屏时留边很大，纯色读作色块；换成"当前场景背景 cover+压暗+模糊"）
+import menuLetterboxUrl from '../assets/ui/menu-opening-background.png?url';
+import forestLetterboxUrl from '../assets/environment/森林花海_原场景清晰化_无坡_1920x1080_v2.png?url';
+import roomLetterboxUrl from '../assets/environment/env-memory-room-empty-1920x1080.png?url';
 
 /** FIT 信箱区颜色 = 各场景自己的背景色（index.html body 有 0.45s 过渡） */
 const SCENE_LETTERBOX: Record<string, string> = {
@@ -16,12 +20,32 @@ const SCENE_LETTERBOX: Record<string, string> = {
   room: '#131a16',
   ending: '#10151c',
 };
+/** 信箱区背景图：留边用当前场景的背景画（cover+模糊压暗，样式在 index.html）。
+ *  null = 不用图（intro 播视频，保持纯黑）。 */
+const LETTERBOX_ART: Record<string, string | null> = {
+  menu: menuLetterboxUrl,
+  intro: null,
+  forest: forestLetterboxUrl,
+  room: roomLetterboxUrl,
+  ending: menuLetterboxUrl,
+};
 /** 模块级引用：off/on 才能真正去重（与房间音乐的接法同款） */
 const syncLetterbox = new Map<string, () => void>(
   Object.entries(SCENE_LETTERBOX).map(([key, color]) => [
     key,
     () => {
       document.body.style.backgroundColor = color;
+      const art = document.getElementById('letterbox-art');
+      if (!art) return;
+      const url = LETTERBOX_ART[key];
+      if (url) {
+        if (art.style.backgroundImage !== `url("${url}")`) {
+          art.style.backgroundImage = `url("${url}")`;
+        }
+        art.style.opacity = '1';
+      } else {
+        art.style.opacity = '0';
+      }
     },
   ]),
 );

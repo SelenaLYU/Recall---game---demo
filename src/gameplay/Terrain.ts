@@ -34,10 +34,32 @@ const COLORS = {
 /** B 交付的可平铺贴图（存在则优先使用，否则程序绘制） */
 const TEXTURE = {
   ground: 'env-jasmine-ground',
+  /** 裁掉透明边后的地面瓦片（ensureGroundTile 生成）——原贴图两侧各有
+   *  ~90/80px 全透明边（实测 alpha=0），直接平铺时每个瓦片边界露出暗缝，
+   *  地面读作"断成数截"（2026-09-24 实机定位，即用户反馈的地面色块/缺口） */
+  groundTile: 'env-jasmine-ground-tiled',
   float: 'env-jasmine-platform',
   /** 板端小花：贴在浮台两端，软化笔直的贴图断口 */
   bloom: 'env-small-jasmine-bloom',
 } as const;
+
+const GROUND_TRIM = { left: 90, right: 80 };
+
+/** 生成裁掉两侧透明边的地面瓦片纹理（场景创建时调用一次，已存在则跳过） */
+function ensureGroundTile(scene: Phaser.Scene): string {
+  if (scene.textures.exists(TEXTURE.groundTile)) {
+    return TEXTURE.groundTile;
+  }
+  const src = scene.textures.get(TEXTURE.ground).getSourceImage() as
+    CanvasImageSource & { width: number; height: number };
+  const w = src.width - GROUND_TRIM.left - GROUND_TRIM.right;
+  const cnv = document.createElement('canvas');
+  cnv.width = w;
+  cnv.height = src.height;
+  cnv.getContext('2d')?.drawImage(src, GROUND_TRIM.left, 0, w, src.height, 0, 0, w, src.height);
+  scene.textures.addCanvas(TEXTURE.groundTile, cnv);
+  return TEXTURE.groundTile;
+}
 
 const GRASS_LIP = 12;
 /** 台阶最大上升高度，越小越顺滑 */
@@ -123,9 +145,11 @@ export class Terrain {
       // 茉莉花篱笆顶面：顶部高出碰撞线 8px，角色脚踩进花丛；TileSprite 平铺。
       // tileScale 与 tint 都统一单值：相邻地面块（B/C 在 x2300 相接）若各带
       // 微扰缩放/明暗交替，接缝处会错位或形成亮度阶——都读作"灰色界限"
-      //（#65 曾把 tint 统一误写进 ForestScene 未生效，本次在正确文件修正）
+      //（#65 曾把 tint 统一误写进 ForestScene 未生效，本次在正确文件修正）。
+      // 用裁边后的瓦片平铺，消除原贴图透明边造成的接缝断口
+      const tileKey = ensureGroundTile(this.scene);
       const hedge = this.scene.add
-        .tileSprite(x, y - 8, width, 52, TEXTURE.ground)
+        .tileSprite(x, y - 8, width, 52, tileKey)
         .setOrigin(0, 0);
       hedge.setTileScale(0.236, 0.236);
       hedge.setTint(0xf2f7f0);

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import introVideoUrl from '../../assets/animation/南风不回信游戏开头动画3.mp4?url';
 import introVoiceUrl from '../../assets/audio/intro-voice.wav?url';
+import skipButtonUrl from '../../assets/ui/04_skip-animation_偷偷快进一下.png?url';
 import { BASE_WIDTH, BASE_HEIGHT, applyHDCamera } from '../systems/Resolution';
 import { showForestLoadingUI, type LoadingUIHandle } from '../ui/ForestLoadingUI';
 
@@ -105,11 +106,19 @@ export default class IntroScene extends Phaser.Scene {
     video.on('error', showError);
     video.on('unsupported', showError);
 
+    // 跳过按钮用 A 的 04 号图（"偷偷快进一下/跳过动画"，文字已烘焙）：
+    // DOM img 走 positionMedia 的右上角定位，宽度随画布缩放保持逻辑 128px
     const skip = document.createElement('button');
     skip.type = 'button';
-    skip.textContent = '跳过动画';
     skip.setAttribute('aria-label', '跳过开场动画');
-    skip.style.cssText = 'position:fixed;z-index:2147481500;color:rgba(247,237,207,.72);background:rgba(14,32,24,.26);border:1px solid rgba(247,237,207,.30);border-radius:3px;padding:7px 12px;font:11px Arial,"Microsoft YaHei",sans-serif;letter-spacing:.14em;box-shadow:0 2px 8px rgba(10,25,18,.25);backdrop-filter:blur(4px);opacity:.78;white-space:nowrap;cursor:pointer;';
+    skip.style.cssText = 'position:fixed;z-index:2147481500;border:none;background:none;padding:0;cursor:pointer;opacity:.94;transition:opacity .15s;line-height:0;';
+    skip.addEventListener('mouseenter', () => { skip.style.opacity = '1'; });
+    skip.addEventListener('mouseleave', () => { skip.style.opacity = '.94'; });
+    const skipImg = document.createElement('img');
+    skipImg.src = skipButtonUrl;
+    skipImg.alt = '';
+    skipImg.style.cssText = 'display:block;pointer-events:none;';
+    skip.append(skipImg);
     skip.addEventListener('click', enterForest);
     document.body.append(skip);
 
@@ -168,14 +177,18 @@ export default class IntroScene extends Phaser.Scene {
     }
     const positionMedia = () => {
       const bounds = this.game.canvas.getBoundingClientRect();
+      const uiScale = bounds.width / BASE_WIDTH;
       if (media) {
         media.style.left = `${bounds.left}px`;
         media.style.top = `${bounds.top}px`;
         media.style.width = `${bounds.width}px`;
         media.style.height = `${bounds.height}px`;
       }
-      skip.style.left = `${bounds.right - 24 * bounds.width / BASE_WIDTH}px`;
-      skip.style.top = `${bounds.top + 24 * bounds.height / BASE_HEIGHT}px`;
+      // 逻辑 128px 宽、右/上各留 18 逻辑 px；图比例 433:191
+      skipImg.style.width = `${128 * uiScale}px`;
+      skipImg.style.height = 'auto';
+      skip.style.left = `${bounds.right - 18 * uiScale}px`;
+      skip.style.top = `${bounds.top + 18 * uiScale}px`;
       skip.style.transform = 'translateX(-100%)';
     };
     positionMedia();
