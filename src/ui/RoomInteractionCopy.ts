@@ -26,6 +26,7 @@ export function showPhotoMemoryText(scene: Phaser.Scene, completedPhotoUrl: stri
     title: '那天的照片',
     imageUrl: completedPhotoUrl,
     imageAlt: '外公外婆和鱼鱼在动物园的合照',
+    layout: 'photo',
     entries: [{
       text: '那是外公外婆第一次带鱼鱼去动物园。鱼鱼看见老虎吓得一下把头埋进外公怀里，外公和外婆却笑得开怀。外公一直很喜欢这张照片。',
     }],
