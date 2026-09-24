@@ -22,6 +22,7 @@ import doorUrl from '../../assets/environment/env-manchurian-jasmine-door-256x38
 import keyUrl from '../../assets/environment/item-golden-jasmine-key-192x256.png?url';
 import giantPlantUrl from '../../assets/environment/env-giant-jasmine-plant-256x384.png?url';
 import treeUrl from '../../assets/environment/env-tree-watercolor-256x320.png?url';
+import sprigUrl from '../../assets/environment/env-glowing-multicolor-jasmine-sprig-256x256.png?url';
 import bloomUrl from '../../assets/environment/env-small-jasmine-bloom-128x128.png?url';
 import grabAnimUrl from '../../assets/environment/yuyu-grab-small-jasmine-right-128x160-6f.png?url';
 import footstepUrl from '../../assets/audio/sfx-footstep.wav?url';
@@ -105,6 +106,7 @@ export default class ForestScene extends Phaser.Scene {
     this.load.image('item-golden-key', keyUrl);
     this.load.image('env-giant-jasmine-plant', giantPlantUrl);
     this.load.image('env-tree-watercolor', treeUrl);
+    this.load.image('env-glowing-sprig', sprigUrl);
     this.load.image('env-small-jasmine-bloom', bloomUrl);
     this.load.spritesheet('char-yuyu-grab', grabAnimUrl, {
       frameWidth: 128,
