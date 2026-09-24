@@ -9,7 +9,7 @@ import { BASE_WIDTH, BASE_HEIGHT, applyHDCamera, computeBufferScale, initialBuff
 import menuBackgroundUrl from '../assets/ui/menu-opening-background.png?url';
 import menuTitleUrl from '../assets/ui/menu-opening-title.png?url';
 import menuButtonUrl from '../assets/ui/menu-opening-button.png?url';
-import menuHelpUrl from '../assets/ui/menu-opening-help.png?url';
+import adventureNoteUrl from '../assets/ui/adventure-note.png?url';
 
 /** FIT 信箱区颜色 = 各场景自己的背景色（index.html body 有 0.45s 过渡） */
 const SCENE_LETTERBOX: Record<string, string> = {
@@ -39,7 +39,7 @@ class MenuScene extends Phaser.Scene {
     this.load.image('ui-menu-background', menuBackgroundUrl);
     this.load.image('ui-menu-title', menuTitleUrl);
     this.load.image('ui-menu-button', menuButtonUrl);
-    this.load.image('ui-menu-help', menuHelpUrl);
+    this.load.image('ui-adventure-note', adventureNoteUrl);
   }
 
   create() {
@@ -66,13 +66,9 @@ class MenuScene extends Phaser.Scene {
 
     // A 的开屏素材是分层图片；文字和按钮仍由游戏绘制，确保可点击、可改文案。
     this.add.rectangle(480, 270, 960, 540, 0x091c16, 0.17);
-    this.add.text(480, 105, '✦  一段关于陪伴、记忆与重逢的故事  ✦', {
-      fontFamily: 'serif', fontSize: '17px', color: '#fff9e8',
-    }).setOrigin(0.5).setShadow(0, 2, '#10221a', 5, false, true);
     this.add.image(480, 188, 'ui-menu-title').setDisplaySize(540, 180);
-    this.add.text(480, 275, '有些想念，没有回音。\n却一直，在风里等你。', {
-      fontFamily: 'serif', fontSize: '18px', color: '#fff9e8',
-      align: 'center', lineSpacing: 4,
+    this.add.text(480, 276, '一段关于陪伴、记忆与重逢的故事', {
+      fontFamily: 'serif', fontSize: '17px', color: '#fff9e8', letterSpacing: 7,
     }).setOrigin(0.5).setShadow(0, 2, '#10221a', 5, false, true);
 
     let helpPanel: Phaser.GameObjects.Container | undefined;
@@ -103,38 +99,28 @@ class MenuScene extends Phaser.Scene {
       helpPanel = this.add.container(480, 270).setDepth(100);
       const veil = this.add.rectangle(0, 0, 960, 540, 0x071610, 0.65)
         .setInteractive();
-      const panel = this.add.image(0, 0, 'ui-menu-help').setDisplaySize(800, 455);
-      const heading = this.add.text(0, -167, '操作说明', {
-        fontFamily: 'serif', fontSize: '35px', color: '#1c4033',
-      }).setOrigin(0.5);
-      const intro = this.add.text(0, -120, '先熟悉脚步，再循着微光向前。', {
-        fontFamily: 'serif', fontSize: '17px', color: '#41564c',
-      }).setOrigin(0.5);
-      const instructions = [
-        ['行走', 'A / D 或 ← / →', '跳跃', '空格；空中再按一次可二段跳'],
-        ['摆荡', '靠近藤蔓自动抓住，A / D 摆动', '攀爬', 'W / S 沿藤蔓移动，空格松手'],
-      ];
-      const rows: Phaser.GameObjects.Text[] = [];
-      instructions.forEach((row, index) => {
-        const y = -53 + index * 86;
-        rows.push(this.add.text(-300, y, row[0], { fontFamily: 'serif', fontSize: '21px', color: '#193d31' }));
-        rows.push(this.add.text(-300, y + 30, row[1], { fontSize: '14px', color: '#3c5146' }));
-        rows.push(this.add.text(65, y, row[2], { fontFamily: 'serif', fontSize: '21px', color: '#193d31' }));
-        rows.push(this.add.text(65, y + 30, row[3], { fontSize: '14px', color: '#3c5146' }));
-      });
-      const outro = this.add.text(0, 134, '找到钥匙，让记忆中的门再次出现。', {
-        fontFamily: 'serif', fontSize: '16px', color: '#41564c',
-      }).setOrigin(0.5);
-      const close = this.add.text(0, 177, '知道了', {
-        fontFamily: 'serif', fontSize: '21px', color: '#17392e',
-        backgroundColor: '#e3ebde', padding: { x: 34, y: 7 },
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-      close.on('pointerup', closeHelp);
-      helpPanel.add([veil, panel, heading, intro, ...rows, outro, close]);
+      // A 的整张说明图已包含标题、键帽和文案；等比显示，避免重复叠字。
+      const panel = this.add.image(0, 0, 'ui-adventure-note').setName('adventure-note-panel');
+      panel.setScale(Math.min(BASE_WIDTH / panel.width, BASE_HEIGHT / panel.height));
+      helpPanel.add([veil, panel]);
+
+      // 热区以图片宽高的比例定位，窗口缩放后仍对齐图中的两个关闭入口。
+      const addCloseArea = (name: string, x: number, y: number, width: number, height: number) => {
+        const area = this.add.zone(
+          (x - 0.5) * panel.displayWidth,
+          (y - 0.5) * panel.displayHeight,
+          width * panel.displayWidth,
+          height * panel.displayHeight,
+        ).setName(name).setInteractive({ useHandCursor: true });
+        area.on('pointerup', closeHelp);
+        helpPanel!.add(area);
+      };
+      addCloseArea('adventure-note-close', 0.861, 0.137, 0.045, 0.08);
+      addCloseArea('adventure-note-return', 0.5, 0.882, 0.205, 0.085);
     };
-    addMenuButton(352, '开始游戏', 360, startGame);
-    addMenuButton(420, '操作说明', 285, showHelp);
-    this.add.text(480, 500, '✦  Enter 开始旅程 · H 操作说明  ✦', {
+    addMenuButton(350, '开始游戏', 360, startGame);
+    addMenuButton(420, '冒险小纸条', 260, showHelp);
+    this.add.text(480, 500, '✦  Enter 开始旅程 · H 冒险小纸条  ✦', {
       fontFamily: 'serif', fontSize: '14px', color: '#f8f4e5',
     }).setOrigin(0.5).setShadow(0, 2, '#10221a', 5, false, true);
 
