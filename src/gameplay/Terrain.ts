@@ -121,13 +121,14 @@ export class Terrain {
   private drawGround(x: number, y: number, width: number, height: number): void {
     if (this.scene.textures.exists(TEXTURE.ground)) {
       // 茉莉花篱笆顶面：顶部高出碰撞线 8px，角色脚踩进花丛；TileSprite 平铺。
-      // 缩放/色差按块微调，打散"同一花纹无限重复"的贴图感
-      const jitter = (((x * 7) % 7) - 3) / 1000;
+      // tileScale 与 tint 都统一单值：相邻地面块（B/C 在 x2300 相接）若各带
+      // 微扰缩放/明暗交替，接缝处会错位或形成亮度阶——都读作"灰色界限"
+      //（#65 曾把 tint 统一误写进 ForestScene 未生效，本次在正确文件修正）
       const hedge = this.scene.add
         .tileSprite(x, y - 8, width, 52, TEXTURE.ground)
         .setOrigin(0, 0);
-      hedge.setTileScale(0.236 + jitter, 0.236 + jitter);
-      hedge.setTint(x % 240 < 120 ? 0xf6f9f2 : 0xe9efe4);
+      hedge.setTileScale(0.236, 0.236);
+      hedge.setTint(0xf2f7f0);
       // 顶面不再画任何程序高光/描边（2026-09-24：topGlow 淡线实机读作
       // "灰色界限"，与水彩背景割裂）——落脚面读法交给贴图本身
       return;
