@@ -1,27 +1,12 @@
 import Phaser from 'phaser';
-import { createMenuMemoryBackground } from './MenuMemoryBackground';
 import IntroScene from './scenes/IntroScene';
 import ForestScene from './scenes/ForestScene';
 import RoomScene from './scenes/RoomScene';
 import EndingScene from './scenes/EndingScene';
-import { preloadMenuRoomMusic, playMenuRoomMusic } from './MenuRoomMusic';
+import { isBackgroundMusicEnabled, preloadMenuRoomMusic, playMenuRoomMusic, setBackgroundMusicEnabled } from './MenuRoomMusic';
 import { BASE_WIDTH, BASE_HEIGHT, applyHDCamera, computeBufferScale, initialBufferSize } from './systems/Resolution';
-import menuBackgroundUrl from '../assets/ui/menu-opening-background.png?url';
-import menuTitleUrl from '../assets/ui/menu-opening-title.png?url';
-import menuHelpUrl from '../assets/ui/menu-opening-help.png?url';
-// A 的南风 UI 套件（2026-09-24 到货）：功能按钮，文案已烘焙在图里
-import enterGameUrls from './uiEntryButtons';
-import helpButtonUrl from '../assets/ui/10_help_冒险小纸条.png?url';
-import captionUrl from '../assets/ui/13_caption_和鱼鱼一起去回南城冒险吧.png?url';
-import musicOnUrl from '../assets/ui/03_music-on_把风唱给你.png?url';
-import musicOffUrl from '../assets/ui/02_music-off_让风轻轻说.png?url';
-
-/** 全局音乐开关（A 的 02/03 按钮）：只静音 Phaser 场景音频（BGM/正式音效），
- * 森林 Sfx 的合成音走独立 WebAudio 不受控——这是"音乐开关"不是"全部静音" */
-let musicMuted = false;
-const applyMusicMute = (scene: Phaser.Scene) => {
-  scene.sound.mute = musicMuted;
-};
+import menuFullUrl from '../assets/ui/menu-opening-full.png?url';
+import adventureNoteUrl from '../assets/ui/adventure-note.png?url';
 
 /** FIT 信箱区颜色 = 各场景自己的背景色（index.html body 有 0.45s 过渡） */
 const SCENE_LETTERBOX: Record<string, string> = {
@@ -48,15 +33,8 @@ class MenuScene extends Phaser.Scene {
 
   preload() {
     preloadMenuRoomMusic(this);
-    this.load.image('ui-menu-background', menuBackgroundUrl);
-    this.load.image('ui-menu-title', menuTitleUrl);
-    this.load.image('ui-menu-help', menuHelpUrl);
-    // A 的功能按钮（文字已烘焙在图里）：进入游戏 5 款随机 + 说明 + 标语 + 音乐开关
-    enterGameUrls.forEach((url, i) => this.load.image(`ui-btn-enter-${i}`, url));
-    this.load.image('ui-btn-help', helpButtonUrl);
-    this.load.image('ui-caption', captionUrl);
-    this.load.image('ui-music-on', musicOnUrl);
-    this.load.image('ui-music-off', musicOffUrl);
+    this.load.image('ui-menu-full', menuFullUrl);
+    this.load.image('ui-adventure-note', adventureNoteUrl);
   }
 
   create() {
@@ -77,45 +55,21 @@ class MenuScene extends Phaser.Scene {
       const target = this.scene.get(key);
       target.events.off(Phaser.Scenes.Events.CREATE, sync);
       target.events.on(Phaser.Scenes.Events.CREATE, sync);
-      // 音乐开关的静音状态同样要覆盖到之后才创建的场景（登记在 CREATE 上）
-      target.events.off(Phaser.Scenes.Events.CREATE, applyMusicMute);
-      target.events.on(Phaser.Scenes.Events.CREATE, applyMusicMute);
     }
-    applyMusicMute(this);
 
-    createMenuMemoryBackground(this);
-
-    // A 的开屏素材是分层图片；按钮已换成 A 的整套 UI（文字烘焙在图里）。
-    this.add.rectangle(480, 270, 960, 540, 0x091c16, 0.17);
-    // 顶部标语带：A 的 13 号横幅（原为绘制的文字行）
-    this.add.image(480, 106, 'ui-caption').setDisplaySize(380, 43);
-    this.add.image(480, 188, 'ui-menu-title').setDisplaySize(540, 180);
-    this.add.text(480, 275, '有些想念，没有回音。\n却一直，在风里等你。', {
-      fontFamily: 'serif', fontSize: '18px', color: '#fff9e8',
-      align: 'center', lineSpacing: 4,
-    }).setOrigin(0.5).setShadow(0, 2, '#10221a', 5, false, true);
+    // A 的最新版首页把标题和按钮绘在同一张图里；只在可点击区域覆盖透明热区。
+    this.add.image(BASE_WIDTH / 2, BASE_HEIGHT / 2, 'ui-menu-full')
+      .setDisplaySize(BASE_WIDTH, BASE_HEIGHT);
 
     let helpPanel: Phaser.GameObjects.Container | undefined;
     const closeHelp = () => {
       helpPanel?.destroy();
       helpPanel = undefined;
     };
-    /** A 的整套功能按钮：文案已烘焙在贴图里，按钮=整图热区 + 轻浮动 */
-    const addArtButton = (
-      y: number, texture: string, width: number, action: () => void,
-    ) => {
-      const frame = this.textures.getFrame(texture);
-      const button = this.add.container(480, y);
-      const image = this.add.image(0, 0, texture)
-        .setDisplaySize(width, (width * frame.height) / frame.width);
-      const hit = this.add.zone(0, 0, width, image.displayHeight)
-        .setInteractive({ useHandCursor: true });
-      hit.on('pointerover', () => this.tweens.add({ targets: button, scale: 1.035, duration: 130 }));
-      hit.on('pointerout', () => this.tweens.add({ targets: button, scale: 1, duration: 130 }));
-      hit.on('pointerdown', () => this.tweens.add({ targets: button, scale: 0.97, duration: 70 }));
-      hit.on('pointerup', action);
-      button.add([image, hit]);
-      return button;
+    const addMenuHotspot = (x: number, y: number, width: number, height: number, action: () => void) => {
+      this.add.zone(x, y, width, height)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerup', action);
     };
     const startGame = () => {
       if (!helpPanel) this.scene.start('intro');
@@ -125,55 +79,43 @@ class MenuScene extends Phaser.Scene {
       helpPanel = this.add.container(480, 270).setDepth(100);
       const veil = this.add.rectangle(0, 0, 960, 540, 0x071610, 0.65)
         .setInteractive();
-      const panel = this.add.image(0, 0, 'ui-menu-help').setDisplaySize(800, 455);
-      const heading = this.add.text(0, -167, '操作说明', {
-        fontFamily: 'serif', fontSize: '35px', color: '#1c4033',
-      }).setOrigin(0.5);
-      const intro = this.add.text(0, -120, '先熟悉脚步，再循着微光向前。', {
-        fontFamily: 'serif', fontSize: '17px', color: '#41564c',
-      }).setOrigin(0.5);
-      const instructions = [
-        ['行走', 'A / D 或 ← / →', '跳跃', '空格；空中再按一次可二段跳'],
-        ['摆荡', '靠近藤蔓自动抓住，A / D 摆动', '攀爬', 'W / S 沿藤蔓移动，空格松手'],
-      ];
-      const rows: Phaser.GameObjects.Text[] = [];
-      instructions.forEach((row, index) => {
-        const y = -53 + index * 86;
-        rows.push(this.add.text(-300, y, row[0], { fontFamily: 'serif', fontSize: '21px', color: '#193d31' }));
-        rows.push(this.add.text(-300, y + 30, row[1], { fontSize: '14px', color: '#3c5146' }));
-        rows.push(this.add.text(65, y, row[2], { fontFamily: 'serif', fontSize: '21px', color: '#193d31' }));
-        rows.push(this.add.text(65, y + 30, row[3], { fontSize: '14px', color: '#3c5146' }));
-      });
-      const outro = this.add.text(0, 134, '找到钥匙，让记忆中的门再次出现。', {
-        fontFamily: 'serif', fontSize: '16px', color: '#41564c',
-      }).setOrigin(0.5);
-      const close = this.add.text(0, 177, '知道了', {
-        fontFamily: 'serif', fontSize: '21px', color: '#17392e',
-        backgroundColor: '#e3ebde', padding: { x: 34, y: 7 },
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-      close.on('pointerup', closeHelp);
-      helpPanel.add([veil, panel, heading, intro, ...rows, outro, close]);
-    };
-    // 进入游戏：5 款开场白随机（每次进菜单不重样）；布局按新图比例微调，避开标语/提示
-    addArtButton(352, `ui-btn-enter-${Math.floor(Math.random() * enterGameUrls.length)}`, 336, startGame);
-    addArtButton(448, 'ui-btn-help', 204, showHelp);
-    this.add.text(480, 508, '✦  Enter 开始旅程 · H 操作说明  ✦', {
-      fontFamily: 'serif', fontSize: '14px', color: '#f8f4e5',
-    }).setOrigin(0.5).setShadow(0, 2, '#10221a', 5, false, true);
+      // A 的整张说明图已包含标题、键帽和文案；等比显示，避免重复叠字。
+      const panel = this.add.image(0, 0, 'ui-adventure-note').setName('adventure-note-panel');
+      panel.setScale(Math.min(BASE_WIDTH / panel.width, BASE_HEIGHT / panel.height));
+      helpPanel.add([veil, panel]);
 
-    // 音乐开关（A 的 02/03）：左上角小按钮，只静音场景音频（BGM/正式音效）
-    const musicButton = this.add.container(64, 40).setDepth(50);
-    const musicImage = this.add.image(0, 0, musicMuted ? 'ui-music-off' : 'ui-music-on')
-      .setDisplaySize(104, 45);
-    const musicHit = this.add.zone(0, 0, 104, 45).setInteractive({ useHandCursor: true });
-    musicHit.on('pointerup', () => {
-      musicMuted = !musicMuted;
-      for (const scene of this.scene.manager.scenes) {
-        scene.sound.mute = musicMuted;
-      }
-      musicImage.setTexture(musicMuted ? 'ui-music-off' : 'ui-music-on');
+      // 热区以图片宽高的比例定位，窗口缩放后仍对齐图中的两个关闭入口。
+      const addCloseArea = (name: string, x: number, y: number, width: number, height: number) => {
+        const area = this.add.zone(
+          (x - 0.5) * panel.displayWidth,
+          (y - 0.5) * panel.displayHeight,
+          width * panel.displayWidth,
+          height * panel.displayHeight,
+        ).setName(name).setInteractive({ useHandCursor: true });
+        area.on('pointerup', closeHelp);
+        helpPanel!.add(area);
+      };
+      addCloseArea('adventure-note-close', 0.861, 0.137, 0.045, 0.08);
+      addCloseArea('adventure-note-return', 0.5, 0.882, 0.205, 0.085);
+    };
+    addMenuHotspot(480, 340, 312, 68, startGame);
+    addMenuHotspot(480, 404, 260, 45, showHelp);
+
+    // 原图右上角写着“关闭音乐”；关闭后盖上同风格的“开启音乐”状态。
+    const musicOffState = this.add.container(875, 47).setVisible(!isBackgroundMusicEnabled());
+    const musicPill = this.add.graphics();
+    musicPill.fillStyle(0x27332f, 0.96).fillRoundedRect(-64, -19, 128, 38, 19);
+    musicPill.lineStyle(1, 0xf7ead0, 0.95).strokeRoundedRect(-64, -19, 128, 38, 19);
+    musicOffState.add([
+      musicPill,
+      this.add.text(-43, 0, '♫', { fontFamily: 'serif', fontSize: '23px', color: '#fff6df' }).setOrigin(0.5),
+      this.add.text(16, 0, '开启音乐', { fontFamily: 'serif', fontSize: '17px', color: '#fff6df' }).setOrigin(0.5),
+    ]);
+    addMenuHotspot(875, 47, 130, 44, () => {
+      const enabled = !isBackgroundMusicEnabled();
+      setBackgroundMusicEnabled(enabled);
+      musicOffState.setVisible(!enabled);
     });
-    musicButton.add([musicImage, musicHit]);
 
     const keyboard = this.input.keyboard;
     keyboard?.on('keydown-ENTER', startGame);

@@ -11,6 +11,8 @@ export interface RoomTextOptions {
   /** A transparent object image, such as the calendar or completed photo. */
   imageUrl?: string;
   imageAlt?: string;
+  /** Fit a landscape photo into the shared calendar-style inspect overlay. */
+  layout?: 'photo';
   onClose?: () => void;
 }
 
@@ -65,6 +67,12 @@ function installStyle(): void {
       scrollbar-width: thin;
     }
     .recall-room-text__panel--compact { top: 170px; min-height: 155px; }
+    .recall-room-text--photo .recall-room-text__backdrop {
+      background: transparent;
+    }
+    .recall-room-text--photo .recall-room-text__object {
+      left: 230px; top: 116px; width: 350px; height: 310px;
+    }
     .recall-room-text__title {
       margin: 0 34px 16px 0; font-size: 20px; line-height: 1.35;
       font-weight: 600; letter-spacing: .03em;
@@ -98,7 +106,7 @@ export function showRoomText(scene: Phaser.Scene, options: RoomTextOptions): Roo
   installStyle();
 
   const root = document.createElement('div');
-  root.className = 'recall-room-text';
+  root.className = `recall-room-text${options.layout === 'photo' ? ' recall-room-text--photo' : ''}`;
   root.setAttribute('role', 'dialog');
   root.setAttribute('aria-modal', 'true');
   root.setAttribute('aria-label', options.title);
@@ -160,11 +168,33 @@ export function showRoomText(scene: Phaser.Scene, options: RoomTextOptions): Roo
   scene.scale.on(Phaser.Scale.Events.RESIZE, position);
 
   const wasPaused = scene.scene.isPaused();
-  if (!wasPaused) scene.scene.pause();
   let closed = false;
+  const pauseAfterRender = () => {
+    if (!closed && scene.scene.isActive()) scene.scene.pause();
+  };
+  const pauseOnNextRender = () => {
+    if (!closed && scene.scene.isActive()) {
+      scene.game.events.once(Phaser.Core.Events.POST_RENDER, pauseAfterRender);
+    }
+  };
+  if (!wasPaused) {
+    // The puzzle layer was just removed. Wait for its warm camera flash to end
+    // and for the room to render before freezing the canvas behind the photo.
+    if (options.layout === 'photo') {
+      if (scene.cameras.main.flashEffect.isRunning) {
+        scene.cameras.main.once(Phaser.Cameras.Scene2D.Events.FLASH_COMPLETE, pauseOnNextRender);
+      } else {
+        pauseOnNextRender();
+      }
+    } else {
+      scene.scene.pause();
+    }
+  }
   const close = (resume = true) => {
     if (closed) return;
     closed = true;
+    scene.cameras.main.off(Phaser.Cameras.Scene2D.Events.FLASH_COMPLETE, pauseOnNextRender);
+    scene.game.events.off(Phaser.Core.Events.POST_RENDER, pauseAfterRender);
     scene.scale.off(Phaser.Scale.Events.RESIZE, position);
     scene.events.off(Phaser.Scenes.Events.SHUTDOWN, onShutdown);
     root.remove();

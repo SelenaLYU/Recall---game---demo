@@ -6,6 +6,7 @@ import { Sfx } from '../systems/Sfx';
 import { applyHDCamera, bufferScaleOf, screenRefScaleOf } from '../systems/Resolution';
 import { createTouchControls, type TouchControlsHandle } from '../ui/TouchControls';
 import { showForestLoadingUI } from '../ui/ForestLoadingUI';
+import { isBackgroundMusicEnabled } from '../MenuRoomMusic';
 import { Vine } from '../gameplay/Vine';
 import { Flower } from '../gameplay/Flower';
 import idleUrl from '../../assets/character/char-yuyu-idle-right-96x112-4f.png?url';
@@ -117,7 +118,7 @@ export default class ForestScene extends Phaser.Scene {
   /** 森林专属配乐：首次用户操作后解锁，离开森林时停止并清理。 */
   private startForestMusic(): void {
     this.stopForestMusic();
-    if (!this.cache.audio.exists('forest-bgm')) return;
+    if (!isBackgroundMusicEnabled() || !this.cache.audio.exists('forest-bgm')) return;
     this.forestMusic = this.sound.add('forest-bgm', { loop: true, volume: 0.35 });
 
     const start = () => {
