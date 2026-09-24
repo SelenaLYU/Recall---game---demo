@@ -1,0 +1,6 @@
+结尾动画卡在加载画面的修复
+
+请把 src\scenes\EndingScene.ts 复制到自己的 Recall---game---demo 项目同名位置，选择覆盖。
+其他文件不用改。
+
+在 VS Code 终端运行 npm.cmd run dev，进入房间并触发结尾动画检查。满意后由你自己提交、上传到 GitHub。
