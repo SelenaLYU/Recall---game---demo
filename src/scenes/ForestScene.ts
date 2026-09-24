@@ -583,7 +583,7 @@ export default class ForestScene extends Phaser.Scene {
     }
   }
 
-  /** 花面接触：只在刚落上那一拍触发压扁/弹跳 */
+  /** 花面接触：落上一拍触发压缩/弹跳；踩住期间持续下沉、离开弹性回弹 */
   private updateFlowerContact(): void {
     const body = this.player.view.body as Phaser.Physics.Arcade.Body;
     const feetY = this.player.view.y + 28;
@@ -593,15 +593,19 @@ export default class ForestScene extends Phaser.Scene {
         ) ?? null
       : null;
 
+    // 物理触感：每帧驱动踩住/离开——站住保持下沉，离开 Back 过冲回弹
+    for (const f of this.flowers) {
+      f.setPressed(f === onFlower, this);
+    }
+
     if (onFlower && onFlower !== this.lastFlower) {
       onFlower.squash(this);
       if (onFlower.bouncy) {
         body.setVelocityY(FLOWER_BOUNCE);
         this.sfx.bounce();
       } else {
-        // 普通花反馈：花本体极轻下沉+暖光一闪（软垫读法）+ 脚步声——
-        // 不摇不摆、无粒子无光圈（历次反馈形式的收敛，见 Flower.press 注释）
-        onFlower.press(this);
+        // 落上瞬间深压脉冲（比踩住稳态更深）+ 脚步声
+        onFlower.pressPulse(this);
         this.sfx.step();
       }
     }
