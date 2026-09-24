@@ -39,6 +39,75 @@ const FLOWER_BOUNCE = -1000;
 
 const GOLD = 0xe6cf97;
 
+/**
+ * 背景接缝展平：`森林花海_清晰化_v2` 经 AI 增强处理时按瓦片进行，瓦片间留下
+ * 亮度台阶——实测 4 条竖缝（x=147/528/1117/1571，差 13~15）+ 1 条横缝
+ * （y=608，差 39），画面上读作"背景大色块"（用户多次反馈）。
+ * 修法：加载后逐像素对每条缝做带内 smoothstep 亮度过渡（台阶溶解为渐变，
+ * 带外像素零改动），生成展平版画布纹理。数据由列/行亮度剖面实测而来。
+ */
+const BG_SEAMS: Array<{ axis: 'x' | 'y'; pos: number; d: number; band: number }> = [
+  { axis: 'x', pos: 147, d: 15.12, band: 240 },
+  { axis: 'x', pos: 528, d: 12.93, band: 240 },
+  { axis: 'x', pos: 1117, d: -14.95, band: 240 },
+  { axis: 'x', pos: 1571, d: -12.93, band: 240 },
+  { axis: 'y', pos: 608, d: 39.14, band: 320 },
+];
+
+function ensureFlattenedForestBg(scene: Phaser.Scene): string {
+  const FLAT_KEY = 'env-forest-bg-flat';
+  if (scene.textures.exists(FLAT_KEY)) {
+    return FLAT_KEY;
+  }
+  const src = scene.textures.get('env-forest-bg').getSourceImage() as
+    CanvasImageSource & { width: number; height: number };
+  const cnv = document.createElement('canvas');
+  cnv.width = src.width;
+  cnv.height = src.height;
+  const ctx = cnv.getContext('2d', { willReadFrequently: true })!;
+  ctx.drawImage(src, 0, 0);
+  const img = ctx.getImageData(0, 0, cnv.width, cnv.height);
+  const data = img.data;
+  const W = cnv.width;
+  const H = cnv.height;
+  const smooth = (t: number) => {
+    const c = Phaser.Math.Clamp(t, 0, 1);
+    return c * c * (3 - 2 * c);
+  };
+  // 每像素总校正量：竖缝给随 x 的 ramp，横缝给随 y 的 ramp（带外为 0）
+  const offset = new Float32Array(W * H);
+  for (const s of BG_SEAMS) {
+    const lo = s.pos - s.band;
+    const hi = s.pos + s.band;
+    if (s.axis === 'x') {
+      for (let x = Math.max(0, lo); x < Math.min(W, hi); x++) {
+        const corr = s.d * (smooth((x - lo) / (2 * s.band)) - (x >= s.pos ? 1 : 0));
+        for (let y = 0; y < H; y++) {
+          offset[y * W + x] += corr;
+        }
+      }
+    } else {
+      for (let y = Math.max(0, lo); y < Math.min(H, hi); y++) {
+        const corr = s.d * (smooth((y - lo) / (2 * s.band)) - (y >= s.pos ? 1 : 0));
+        for (let x = 0; x < W; x++) {
+          offset[y * W + x] += corr;
+        }
+      }
+    }
+  }
+  for (let i = 0, px = 0; i < data.length; i += 4, px++) {
+    const o = offset[px];
+    if (o !== 0) {
+      data[i] = Phaser.Math.Clamp(data[i] + o, 0, 255);
+      data[i + 1] = Phaser.Math.Clamp(data[i + 1] + o, 0, 255);
+      data[i + 2] = Phaser.Math.Clamp(data[i + 2] + o, 0, 255);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  scene.textures.addCanvas(FLAT_KEY, cnv);
+  return FLAT_KEY;
+}
+
 export default class ForestScene extends Phaser.Scene {
   private player!: Player;
   private terrain!: Terrain;
@@ -227,7 +296,7 @@ export default class ForestScene extends Phaser.Scene {
    */
   private buildArtBackdrop(): void {
     this.sfBackdrop = this.add
-      .image(0, 0, 'env-forest-bg')
+      .image(0, 0, ensureFlattenedForestBg(this))
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(-9)
