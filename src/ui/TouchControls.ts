@@ -10,6 +10,9 @@ export interface TouchControlsHandle {
   destroy(): void;
 }
 
+/** 按钮命中半径（手指友好 ≥48px，Phaser 输入用显式 Circle hitArea） */
+const HIT_RADIUS = 46;
+
 /** 半透明圆形屏幕按钮（◀ ▶ ⤒） */
 function roundButton(
   scene: Phaser.Scene,
@@ -23,20 +26,34 @@ function roundButton(
     .text(0, -2, label, { fontFamily: 'sans-serif', fontSize: '26px', color: '#f0dfb5' })
     .setOrigin(0.5);
   c.add([disc, text]);
+  // 命中区大于可视圆（手指精度），显式 Circle hitArea 绑在容器上
+  c.setInteractive(
+    new Phaser.Geom.Circle(0, 0, HIT_RADIUS),
+    Phaser.Geom.Circle.Contains,
+  );
   return c;
+}
+
+/** 粗指针（触摸屏）检测：matchMedia + maxTouchPoints 双兜底 */
+function isTouchDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0
+  );
 }
 
 /**
  * 手机版触摸控制：左下 ◀ ▶ 方向键 + 右下 ⤒ 跳跃键。
- * 仅在粗指针设备（触摸屏）显示——桌面完全无感；挂在 scrollFactor 0 层，
- * 随渲染缓冲重缩放（与 hudLayer 同约定）。跳跃走 Player 的跳跃缓冲通路，
- * 空中再按同样触发二段跳。
+ * 依赖 main.ts 的 `input.activePointers ≥ 2`（Phaser 默认 1，按住方向同时
+ * 点跳跃的第二个触摸会被忽略）；画布 `touch-action:none`（index.html）挡掉
+ * 浏览器手势。跳跃走 Player 的跳跃缓冲通路，空中再按触发二段跳。
+ * 仅触摸设备显示——桌面完全无感。
  */
 export function createTouchControls(
   scene: Phaser.Scene,
   sink: TouchInputSink,
 ): TouchControlsHandle {
-  if (typeof window === 'undefined' || !window.matchMedia('(pointer: coarse)').matches) {
+  if (!isTouchDevice()) {
     return { destroy() {} };
   }
 
@@ -47,9 +64,9 @@ export function createTouchControls(
   const onShutdown = () => destroy();
   scene.events.once(Phaser.Scenes.Events.SHUTDOWN, onShutdown);
 
-  const leftBtn = roundButton(scene, 76, 470, '◀');
-  const rightBtn = roundButton(scene, 178, 470, '▶');
-  const jumpBtn = roundButton(scene, 880, 462, '⤒');
+  const leftBtn = roundButton(scene, 78, 468, '◀');
+  const rightBtn = roundButton(scene, 182, 468, '▶');
+  const jumpBtn = roundButton(scene, 878, 460, '⤒');
   layer.add([leftBtn, rightBtn, jumpBtn]);
 
   const bindHold = (
@@ -57,10 +74,9 @@ export function createTouchControls(
     onDown: () => void,
     onUp: () => void,
   ): void => {
-    btn.setInteractive({ useHandCursor: false });
     btn.on('pointerdown', () => {
       onDown();
-      scene.tweens.add({ targets: btn, alpha: 0.75, duration: 70 });
+      scene.tweens.add({ targets: btn, alpha: 0.7, duration: 60 });
     });
     const release = () => {
       onUp();
