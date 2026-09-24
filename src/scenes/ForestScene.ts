@@ -340,7 +340,7 @@ export default class ForestScene extends Phaser.Scene {
       if (texture && ctx) {
         const gradient = ctx.createLinearGradient(0, 130, 0, 540);
         gradient.addColorStop(0, 'rgba(10, 26, 19, 0)');
-        gradient.addColorStop(0.45, 'rgba(10, 26, 19, 0.56)');
+        gradient.addColorStop(0.45, 'rgba(10, 26, 19, 0.6)');
         gradient.addColorStop(1, 'rgba(10, 26, 19, 0.82)');
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, 960, 540);

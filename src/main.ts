@@ -168,6 +168,9 @@ const game = new Phaser.Game({
     autoRound: true, // CSS 位置取整，避免半像素模糊
   },
   render: { antialias: true, powerPreference: 'high-performance' },
+  // 手机触摸控制需要多点触控：默认 activePointers=1，"按住方向键同时点跳跃"
+  // 的第二个触摸会被忽略（Phaser 源码 Config 默认值，文档 Input 配置项）
+  input: { activePointers: 3 },
   scene: [MenuScene, IntroScene, ForestScene, RoomScene, EndingScene],
 });
 

@@ -695,15 +695,33 @@ export default class RoomScene extends Phaser.Scene {
       ctx.fillRect(0, 0, 160, 160);
       this.textures.addCanvas('orb-glow', cnv);
     }
-    const orb = this.add.image(0, 0, 'orb-glow').setScale(0.85);
+    // 双层光球：外晕（大而淡）+ 内核（小而亮），均用 ADD 混合压在画面上发光
+    const halo = this.add
+      .image(0, 0, 'orb-glow')
+      .setScale(1.4)
+      .setAlpha(0.55)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    const orb = this.add
+      .image(0, 0, 'orb-glow')
+      .setScale(0.8)
+      .setBlendMode(Phaser.BlendModes.ADD);
     const hit = this.add.circle(0, 0, 44, 0xffffff, 0).setInteractive({ useHandCursor: true });
     hit.on('pointerdown', () => this.touchMemoryOrb());
-    this.memoryOrb.add([orb, hit]);
+    this.memoryOrb.add([halo, orb, hit]);
     // 球本体也点亮房间（有来源的金色光，随呼吸明暗）
     this.orbLight = this.lights.addLight(480, 305, 240, GOLD, 0.8);
     this.tweens.add({
       targets: orb,
-      scale: 0.95,
+      scale: 0.9,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+    this.tweens.add({
+      targets: halo,
+      scale: 1.56,
+      alpha: 0.72,
       duration: 1500,
       yoyo: true,
       repeat: -1,
