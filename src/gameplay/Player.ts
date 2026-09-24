@@ -515,7 +515,10 @@ export class Player {
       }
     }
 
-    if (this.justPressed('SPACE')) {
+    // 松手甩出：键盘空格或触摸跳跃键（update() 在挂藤时提前返回，
+    // 触摸队列只能在这里消费——否则手机抓上花环就再也松不开）
+    if (this.justPressed('SPACE') || this.touchJumpQueued) {
+      this.touchJumpQueued = false;
       this.releaseVine();
     }
   }
