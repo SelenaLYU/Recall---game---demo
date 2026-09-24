@@ -19,11 +19,11 @@ const MESSAGES = [
   '轻轻转动旋钮。',
   '……沙沙的杂音。',
   '……呼呼的风声。',
-  '爷爷没有离开你，只是现在在一个叫回南城的地方。',
+  '外公没有离开你，只是现在在一个叫回南城的地方。',
   '……熟悉的歌声响起。',
 ];
 
-const CHANNEL_LABELS = ['', '杂音', '风声', '爷爷的声音', '歌声'];
+const CHANNEL_LABELS = ['', '杂音', '风声', '外公的声音', '歌声'];
 
 function installStyle(): void {
   if (document.getElementById(STYLE_ID)) return;

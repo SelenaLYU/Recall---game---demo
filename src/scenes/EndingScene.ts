@@ -8,7 +8,6 @@ import { playMenuRoomMusic, preloadMenuRoomMusic } from '../MenuRoomMusic';
 import { BASE_WIDTH, BASE_HEIGHT, applyHDCamera } from '../systems/Resolution';
 import { showForestLoadingUI, type LoadingUIHandle } from '../ui/ForestLoadingUI';
 
-const VIDEO_KEY = 'ending-complete-video';
 const VOICE_KEY = 'ending-original-voice';
 
 export default class EndingScene extends Phaser.Scene {
@@ -23,12 +22,8 @@ export default class EndingScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#10151c');
     this.loadingOverlay = showForestLoadingUI(this, '正在加载结尾动画', '循着花香，寻找记忆', false);
     preloadMenuRoomMusic(this);
-    if (!this.cache.audio.exists(VOICE_KEY)) this.load.audio(VOICE_KEY, endingVoiceUrl);
     if (!this.textures.exists('ui-menu-background')) this.load.image('ui-menu-background', menuBackgroundUrl);
     if (!this.textures.exists('ui-menu-title')) this.load.image('ui-menu-title', menuTitleUrl);
-    if (!this.cache.binary.exists(VIDEO_KEY)) {
-      this.load.binary(VIDEO_KEY, endingVideoUrl);
-    }
   }
 
   create(): void {
@@ -39,7 +34,6 @@ export default class EndingScene extends Phaser.Scene {
     let mediaReleased = false;
     let firstFrameTimer: ReturnType<typeof setTimeout> | undefined;
     let waitingTimer: Phaser.Time.TimerEvent | undefined;
-    let videoBlobUrl: string | undefined;
 
     const veil = this.add.rectangle(480, 270, BASE_WIDTH, BASE_HEIGHT, 0x091c16, 0.17);
     const logo = this.add.image(480, 188, 'ui-menu-title').setDisplaySize(540, 180);
@@ -69,14 +63,14 @@ export default class EndingScene extends Phaser.Scene {
     media.volume = 0;
     media.preload = 'auto';
     media.style.cssText = 'position:fixed;z-index:2147481000;pointer-events:none;object-fit:contain;background:#10151c;display:block;opacity:0;';
-    const voice = this.cache.audio.exists(VOICE_KEY)
+    let voice = this.cache.audio.exists(VOICE_KEY)
       ? this.sound.add(VOICE_KEY, { loop: false, volume: 1 }) as Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound
       : undefined;
     const skip = document.createElement('button');
     skip.type = 'button';
     skip.textContent = '跳过动画';
     skip.setAttribute('aria-label', '跳过结尾动画');
-    skip.style.cssText = 'position:fixed;z-index:2147481500;color:rgba(247,237,207,.72);background:rgba(14,32,24,.26);border:1px solid rgba(247,237,207,.30);border-radius:3px;padding:7px 12px;font:11px Arial,"Microsoft YaHei",sans-serif;letter-spacing:.14em;box-shadow:0 2px 8px rgba(10,25,18,.25);backdrop-filter:blur(4px);opacity:.78;white-space:nowrap;cursor:pointer;';
+    skip.style.cssText = 'position:fixed;z-index:2147482500;color:rgba(247,237,207,.72);background:rgba(14,32,24,.26);border:1px solid rgba(247,237,207,.30);border-radius:3px;padding:7px 12px;font:11px Arial,"Microsoft YaHei",sans-serif;letter-spacing:.14em;box-shadow:0 2px 8px rgba(10,25,18,.25);backdrop-filter:blur(4px);opacity:.78;white-space:nowrap;cursor:pointer;';
     const playButton = document.createElement('button');
     playButton.type = 'button';
     playButton.textContent = '点击播放并开启声音';
@@ -113,6 +107,11 @@ export default class EndingScene extends Phaser.Scene {
     const onWaiting = () => {
       if (!waitingTimer) waitingTimer = this.time.delayedCall(250, pauseVoice);
     };
+    const onAudioLoaded = (key: string) => {
+      if (key !== VOICE_KEY || finished || disposed || mediaReleased) return;
+      voice = this.sound.add(VOICE_KEY, { loop: false, volume: 1 }) as Phaser.Sound.WebAudioSound | Phaser.Sound.HTML5AudioSound;
+      syncVoice();
+    };
     const positionMedia = () => {
       const bounds = this.game.canvas.getBoundingClientRect();
       media.style.left = `${bounds.left}px`;
@@ -132,6 +131,7 @@ export default class EndingScene extends Phaser.Scene {
       waitingTimer?.remove(false);
       waitingTimer = undefined;
       this.sound.off(Phaser.Sound.Events.UNLOCKED, syncVoice);
+      this.load.off(Phaser.Loader.Events.FILE_COMPLETE, onAudioLoaded);
       media.removeEventListener('playing', onPlaying);
       media.removeEventListener('ended', finishEnding);
       media.removeEventListener('error', showFailure);
@@ -145,8 +145,6 @@ export default class EndingScene extends Phaser.Scene {
       media.removeAttribute('src');
       media.load();
       media.remove();
-      if (videoBlobUrl) URL.revokeObjectURL(videoBlobUrl);
-      videoBlobUrl = undefined;
     };
     const finishEnding = () => {
       if (finished || disposed) return;
@@ -191,7 +189,7 @@ export default class EndingScene extends Phaser.Scene {
       if (finished || disposed || mediaReleased) return;
       playButton.hidden = true;
       clearFirstFrameTimer();
-      firstFrameTimer = setTimeout(showFailure, 15000);
+      firstFrameTimer = setTimeout(showFailure, 45000);
       void media.play().catch((error: unknown) => {
         if (finished || disposed || mediaReleased) return;
         clearFirstFrameTimer();
@@ -224,7 +222,7 @@ export default class EndingScene extends Phaser.Scene {
     media.addEventListener('seeking', pauseVoice);
     media.addEventListener('seeked', syncVoice);
     media.addEventListener('waiting', onWaiting);
-    this.sound.once(Phaser.Sound.Events.UNLOCKED, syncVoice);
+    this.sound.on(Phaser.Sound.Events.UNLOCKED, syncVoice);
     skip.addEventListener('click', finishEnding);
     playButton.addEventListener('click', startPlayback);
     document.body.append(media, skip, playButton);
@@ -233,13 +231,16 @@ export default class EndingScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
     this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
 
-    const bytes = this.cache.binary.get(VIDEO_KEY) as ArrayBuffer | undefined;
-    if (!bytes) {
-      showFailure();
-      return;
+    // Let the browser stream the MP4. Loading the whole video in Phaser's
+    // preload() kept this scene on its loading screen on slow connections.
+    media.src = endingVideoUrl;
+    if (!voice) {
+      // The soundtrack may arrive later; join it at the video's current time.
+      // Keeping it out of preload() also keeps the skip button available.
+      this.load.on(Phaser.Loader.Events.FILE_COMPLETE, onAudioLoaded);
+      this.load.audio(VOICE_KEY, endingVoiceUrl);
+      this.load.start();
     }
-    videoBlobUrl = URL.createObjectURL(new Blob([bytes], { type: 'video/mp4' }));
-    media.src = videoBlobUrl;
     startPlayback();
   }
 }
