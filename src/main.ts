@@ -1,14 +1,11 @@
 import Phaser from 'phaser';
-import { createMenuMemoryBackground } from './MenuMemoryBackground';
 import IntroScene from './scenes/IntroScene';
 import ForestScene from './scenes/ForestScene';
 import RoomScene from './scenes/RoomScene';
 import EndingScene from './scenes/EndingScene';
-import { preloadMenuRoomMusic, playMenuRoomMusic } from './MenuRoomMusic';
+import { isBackgroundMusicEnabled, preloadMenuRoomMusic, playMenuRoomMusic, setBackgroundMusicEnabled } from './MenuRoomMusic';
 import { BASE_WIDTH, BASE_HEIGHT, applyHDCamera, computeBufferScale, initialBufferSize } from './systems/Resolution';
-import menuBackgroundUrl from '../assets/ui/menu-opening-background.png?url';
-import menuTitleUrl from '../assets/ui/menu-opening-title.png?url';
-import menuButtonUrl from '../assets/ui/menu-opening-button.png?url';
+import menuFullUrl from '../assets/ui/menu-opening-full.png?url';
 import adventureNoteUrl from '../assets/ui/adventure-note.png?url';
 
 /** FIT 信箱区颜色 = 各场景自己的背景色（index.html body 有 0.45s 过渡） */
@@ -36,9 +33,7 @@ class MenuScene extends Phaser.Scene {
 
   preload() {
     preloadMenuRoomMusic(this);
-    this.load.image('ui-menu-background', menuBackgroundUrl);
-    this.load.image('ui-menu-title', menuTitleUrl);
-    this.load.image('ui-menu-button', menuButtonUrl);
+    this.load.image('ui-menu-full', menuFullUrl);
     this.load.image('ui-adventure-note', adventureNoteUrl);
   }
 
@@ -62,34 +57,19 @@ class MenuScene extends Phaser.Scene {
       target.events.on(Phaser.Scenes.Events.CREATE, sync);
     }
 
-    createMenuMemoryBackground(this);
-
-    // A 的开屏素材是分层图片；文字和按钮仍由游戏绘制，确保可点击、可改文案。
-    this.add.rectangle(480, 270, 960, 540, 0x091c16, 0.17);
-    this.add.image(480, 188, 'ui-menu-title').setDisplaySize(540, 180);
-    this.add.text(480, 276, '一段关于陪伴、记忆与重逢的故事', {
-      fontFamily: 'serif', fontSize: '17px', color: '#fff9e8', letterSpacing: 7,
-    }).setOrigin(0.5).setShadow(0, 2, '#10221a', 5, false, true);
+    // A 的最新版首页把标题和按钮绘在同一张图里；只在可点击区域覆盖透明热区。
+    this.add.image(BASE_WIDTH / 2, BASE_HEIGHT / 2, 'ui-menu-full')
+      .setDisplaySize(BASE_WIDTH, BASE_HEIGHT);
 
     let helpPanel: Phaser.GameObjects.Container | undefined;
     const closeHelp = () => {
       helpPanel?.destroy();
       helpPanel = undefined;
     };
-    const addMenuButton = (y: number, label: string, width: number, action: () => void) => {
-      const button = this.add.container(480, y);
-      const image = this.add.image(0, 0, 'ui-menu-button').setDisplaySize(width, width / 2.98);
-      const text = this.add.text(10, 1, label, {
-        fontFamily: 'serif', fontSize: width > 300 ? '26px' : '21px',
-        color: '#203d34', letterSpacing: 3,
-      }).setOrigin(0.5);
-      const hit = this.add.zone(0, 0, width * 0.72, 54)
-        .setInteractive({ useHandCursor: true });
-      button.add([image, text, hit]);
-      hit.on('pointerover', () => this.tweens.add({ targets: button, scale: 1.035, duration: 130 }));
-      hit.on('pointerout', () => this.tweens.add({ targets: button, scale: 1, duration: 130 }));
-      hit.on('pointerup', action);
-      return button;
+    const addMenuHotspot = (x: number, y: number, width: number, height: number, action: () => void) => {
+      this.add.zone(x, y, width, height)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerup', action);
     };
     const startGame = () => {
       if (!helpPanel) this.scene.start('intro');
@@ -118,11 +98,24 @@ class MenuScene extends Phaser.Scene {
       addCloseArea('adventure-note-close', 0.861, 0.137, 0.045, 0.08);
       addCloseArea('adventure-note-return', 0.5, 0.882, 0.205, 0.085);
     };
-    addMenuButton(350, '开始游戏', 360, startGame);
-    addMenuButton(420, '冒险小纸条', 260, showHelp);
-    this.add.text(480, 500, '✦  Enter 开始旅程 · H 冒险小纸条  ✦', {
-      fontFamily: 'serif', fontSize: '14px', color: '#f8f4e5',
-    }).setOrigin(0.5).setShadow(0, 2, '#10221a', 5, false, true);
+    addMenuHotspot(480, 340, 312, 68, startGame);
+    addMenuHotspot(480, 404, 260, 45, showHelp);
+
+    // 原图右上角写着“关闭音乐”；关闭后盖上同风格的“开启音乐”状态。
+    const musicOffState = this.add.container(875, 47).setVisible(!isBackgroundMusicEnabled());
+    const musicPill = this.add.graphics();
+    musicPill.fillStyle(0x27332f, 0.96).fillRoundedRect(-64, -19, 128, 38, 19);
+    musicPill.lineStyle(1, 0xf7ead0, 0.95).strokeRoundedRect(-64, -19, 128, 38, 19);
+    musicOffState.add([
+      musicPill,
+      this.add.text(-43, 0, '♫', { fontFamily: 'serif', fontSize: '23px', color: '#fff6df' }).setOrigin(0.5),
+      this.add.text(16, 0, '开启音乐', { fontFamily: 'serif', fontSize: '17px', color: '#fff6df' }).setOrigin(0.5),
+    ]);
+    addMenuHotspot(875, 47, 130, 44, () => {
+      const enabled = !isBackgroundMusicEnabled();
+      setBackgroundMusicEnabled(enabled);
+      musicOffState.setVisible(!enabled);
+    });
 
     const keyboard = this.input.keyboard;
     keyboard?.on('keydown-ENTER', startGame);

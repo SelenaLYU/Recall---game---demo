@@ -2,6 +2,21 @@ import Phaser from 'phaser';
 import musicUrl from '../assets/audio/menu-room-bgm.mp3?url';
 
 const MUSIC_KEY = 'music-menu-room';
+const activeMusic = new Set<Phaser.Sound.BaseSound>();
+let musicEnabled = true;
+
+export function isBackgroundMusicEnabled(): boolean {
+  return musicEnabled;
+}
+
+export function setBackgroundMusicEnabled(enabled: boolean): void {
+  musicEnabled = enabled;
+  for (const music of activeMusic) {
+    if (!enabled && music.isPlaying) music.pause();
+    if (enabled && music.isPaused) music.resume();
+    if (enabled && !music.isPlaying && !music.isPaused && !music.manager.locked) music.play();
+  }
+}
 
 export function preloadMenuRoomMusic(scene: Phaser.Scene): void {
   if (!scene.cache.audio.exists(MUSIC_KEY)) {
@@ -14,10 +29,11 @@ export function playMenuRoomMusic(scene: Phaser.Scene): void {
   if (!scene.cache.audio.exists(MUSIC_KEY)) return;
 
   const music = scene.sound.add(MUSIC_KEY, { loop: true, volume: 0.35 });
+  activeMusic.add(music);
   let active = true;
 
   const start = () => {
-    if (active && !scene.sound.locked && !music.isPlaying) {
+    if (active && musicEnabled && !scene.sound.locked && !music.isPlaying) {
       music.play();
     }
   };
@@ -28,6 +44,7 @@ export function playMenuRoomMusic(scene: Phaser.Scene): void {
     scene.sound.off(Phaser.Sound.Events.UNLOCKED, start);
     scene.events.off(Phaser.Scenes.Events.SHUTDOWN, cleanup);
     scene.events.off(Phaser.Scenes.Events.DESTROY, cleanup);
+    activeMusic.delete(music);
     music.destroy();
   };
 
